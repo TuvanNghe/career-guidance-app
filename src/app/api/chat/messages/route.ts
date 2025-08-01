@@ -1,20 +1,41 @@
+import { NextResponse } from "next/server";            // ✅ thêm dòng này
+import { z } from "zod";
 import { createSupabaseUserClient } from "@/lib/supabaseServer";
 
-export async function GET(req: Request) {
-  // ... validate threadId
-  const supabase = createSupabaseUserClient();          // ⬅️ đổi sang UserClient
+export const runtime = "edge";                         // chạy Edge
 
+/* validate query string */
+const Query = z.object({ threadId: z.string().uuid() });
+
+export async function GET(req: Request) {
+  /* ─── 1. Lấy threadId ─── */
+  const { searchParams } = new URL(req.url);
+  const parse = Query.safeParse(Object.fromEntries(searchParams));
+  if (!parse.success)
+    return NextResponse.json({ error: "threadId (uuid) required" }, { status: 400 });
+
+  const { threadId } = parse.data;
+
+  /* ─── 2. Supabase client (anon key) ─── */
+  const supabase = createSupabaseUserClient();
+
+  /* yêu cầu phải đăng nhập */
   const {
     data: { session },
   } = await supabase.auth.getSession();
-  if (!session) return NextResponse.json({ error: "unauth" }, { status: 401 });
+  if (!session)
+    return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
 
+  /* ─── 3. Lấy tin nhắn ─── */
   const { data, error } = await supabase
     .from("chat_messages")
     .select("id, role, content, created_at")
     .eq("thread_id", threadId)
-    .eq("user_id", session.user.id)                     // RLS still active
+    .eq("user_id", session.user.id)
     .order("created_at");
 
-  /* ... return JSON ... */
+  if (error)
+    return NextResponse.json({ error: error.message }, { status: 500 });
+
+  return NextResponse.json(data ?? []);
 }
