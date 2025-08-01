@@ -1,36 +1,30 @@
-/*  app/chat/[id]/page.tsx  */
 "use client";
 
 import useSWR from "swr";
 import ChatLayout from "@/components/ChatLayout";
 
 interface MsgRow {
-  id       : string;
-  role     : "user" | "assistant";
-  content  : string;
+  id: string;
+  role: "user" | "assistant";
+  content: string;
   created_at: string;
 }
 
-/* api helper */
-const fetchMessages = async (id: string) => {
-  const r = await fetch(`/api/chat/messages?threadId=${id}`);
-  if (!r.ok) throw new Error("Cannot load messages");
-  return (await r.json()) as MsgRow[];
-};
+const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 export default function ChatThread({ params }: { params: { id: string } }) {
-  const userId: string | null = null;            // lấy session nếu cần
-  const { data, error, isLoading, mutate } = useSWR(
-    params.id ? ["msgs", params.id] : null,
-    () => fetchMessages(params.id)
+  /* bạn có thể lấy userId từ useSession() nếu cần */
+  const { data, error, isLoading, mutate } = useSWR<MsgRow[]>(
+    `/api/chat/messages?threadId=${params.id}`,
+    fetcher,
   );
 
   return (
-    <ChatLayout userId={userId} onSent={() => mutate()}>
+    <ChatLayout userId={null} onSent={() => mutate()}>
       {isLoading && <p className="text-sm text-muted-foreground">Đang tải…</p>}
 
       {error && (
-        <p className="text-sm text-red-500">Không thể tải tin nhắn.</p>
+        <p className="text-sm text-red-500">Không thể tải tin nhắn ( {error.message} ).</p>
       )}
 
       {!!data?.length &&

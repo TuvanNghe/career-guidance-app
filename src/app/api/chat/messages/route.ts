@@ -2,39 +2,34 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createSupabaseServerClient } from "@/lib/supabaseServer";
 
-export const runtime = "edge";                // chạy trên Edge Function
+export const runtime = "edge";
 
-/* validate query string */
-const Query = z.object({
-  threadId: z.string().uuid(),
-});
+/* validate query */
+const Query = z.object({ threadId: z.string().uuid() });
 
 export async function GET(req: Request) {
-  /* --------- lấy threadId --------- */
   const { searchParams } = new URL(req.url);
   const parse = Query.safeParse(Object.fromEntries(searchParams));
-  if (!parse.success) {
-    return NextResponse.json(
-      { error: "threadId (uuid) is required" },
-      { status: 400 },
-    );
-  }
+  if (!parse.success)
+    return NextResponse.json({ error: "threadId (uuid) required" }, { status: 400 });
+
   const { threadId } = parse.data;
+  const supabase = createSupabaseServerClient();
 
-  /* --------- Supabase client --------- */
-  const supabase = createSupabaseServerClient(); // đã đọc biến môi trường
+  /* yêu cầu đã đăng nhập */
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  if (!session)
+    return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
 
-  /* --------- truy vấn --------- */
   const { data, error } = await supabase
     .from("chat_messages")
     .select("id, role, content, created_at")
     .eq("thread_id", threadId)
+    .eq("user_id", session.user.id)
     .order("created_at");
 
-  if (error) {
-    console.error("[chat/messages]", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json(data);
 }
