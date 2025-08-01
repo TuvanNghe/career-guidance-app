@@ -12,7 +12,7 @@ import { PlusCircle, Loader2, MessagesSquare } from "lucide-react";
 /* ---------- types ---------- */
 interface ChatLayoutProps {
   userId  : string | null;
-  children: React.ReactNode;              // danh sách tin nhắn render bởi page
+  children: React.ReactNode;
 }
 
 /* ---------- load threads ---------- */
@@ -26,32 +26,28 @@ const fetchThreads = async (uid: string) => {
   }[];
 };
 
-/* ---------- component ---------- */
 export default function ChatLayout({ userId, children }: ChatLayoutProps) {
-  const router   = useRouter();
-  const pathname = usePathname();                 // /chat         hoặc /chat/<uuid>
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const router     = useRouter();
+  const pathname   = usePathname();          // /chat  hoặc /chat/<uuid>
+  const bottomRef  = useRef<HTMLDivElement>(null);
+  const activeId   = pathname.split("/").pop(); // <uuid> | "chat"
 
-  const activeId = pathname.split("/").pop();     // <uuid> | "chat"
-
-  /* lấy danh sách threads */
+  /* threads */
   const { data: threads, isLoading, mutate } = useSWR(
     userId ? ["threads", userId] : null,
     () => fetchThreads(userId!)
   );
 
-  /* auto-scroll sidebar khi có dữ liệu mới */
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [threads]);
 
-  /* helper: mở cuộc trò chuyện */
   const openThread = (id: string) => router.push(`/chat/${id}`);
 
   return (
-    /* 48px là chiều cao header cố định của site */
-    <div className="grid flex-1 grid-cols-[260px_1fr]">
-      {/* ============ SIDEBAR ============ */}
+    /* chiều cao full màn + 2 cột */
+    <div className="grid min-h-[calc(100vh-48px)] grid-cols-[260px_1fr]">
+      {/* ---------- SIDEBAR ---------- */}
       <aside className="flex h-full flex-col border-r bg-background">
         <header className="flex items-center justify-between border-b px-4 py-3 text-sm font-medium">
           <span className="inline-flex items-center gap-1">
@@ -66,29 +62,25 @@ export default function ChatLayout({ userId, children }: ChatLayoutProps) {
         </header>
 
         <ScrollArea className="flex-1">
-          {/* trạng thái tải */}
           {isLoading && (
             <div className="flex h-full items-center justify-center text-muted-foreground">
               <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Đang tải…
             </div>
           )}
 
-          {/* không có thread */}
           {!isLoading && threads?.length === 0 && (
             <p className="px-4 py-6 text-center text-sm text-muted-foreground">
               Bạn chưa có cuộc trò chuyện nào.
             </p>
           )}
 
-          {/* có thread */}
           {!!threads?.length && (
             <HistoryList
               threads={threads}
               activeId={activeId!}
               onSelect={openThread}
               onDelete={async () => {
-                await mutate();              // refresh danh sách
-                /* nếu vừa xoá thread đang xem → quay về trang /chat */
+                await mutate();
                 if (pathname !== "/chat" && !threads.find(t => t.id === activeId))
                   router.push("/chat");
               }}
@@ -99,21 +91,14 @@ export default function ChatLayout({ userId, children }: ChatLayoutProps) {
         </ScrollArea>
       </aside>
 
-      {/* ============ CHAT PANE ============ */}
+      {/* ---------- CHAT PANE ---------- */}
       <section className="relative flex h-full flex-col bg-white">
-        {/* danh sách tin nhắn */}
-        <div className="flex-1 overflow-y-auto space-y-4 px-4 py-6">
-          {children}
-        </div>
+        <div className="flex-1 overflow-y-auto space-y-4 px-4 py-6">{children}</div>
 
-        {/* ô nhập cố định đáy */}
         <div className="sticky bottom-0 border-t bg-background">
           <MessageInput
             userId={userId}
-            threadId={pathname === "/chat" ? undefined : activeId} // undefined với cuộc trò chuyện mới
-            /* sau khi gửi thành công:
-               - mutate để sidebar cập nhật "last message"
-               - nếu đang ở /chat (mới) → chuyển sang URL thread mới */
+            threadId={pathname === "/chat" ? undefined : activeId}
             onSent={(data) => {
               mutate();
               if (pathname === "/chat") openThread(data.threadId);

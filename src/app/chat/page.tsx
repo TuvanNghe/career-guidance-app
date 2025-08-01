@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import ChatLayout   from "@/components/ChatLayout";
 import MessageInput from "@/components/MessageInput";
 
 interface Msg {
@@ -9,47 +10,50 @@ interface Msg {
   text : string;
 }
 
-export default function ChatPage() {
+export default function ChatIndex() {
+  /* nếu có Supabase session hãy lấy userId; demo để null */
+  const userId: string | null = null;
+
+  /* local preview (khi ở /chat, chưa có thread) */
   const [threadId, setThreadId] = useState<string>();
   const [messages, setMessages] = useState<Msg[]>([]);
 
-  /* callback khi gửi thành công */
-  function handleSent(data: { assistantReply: string; threadId: string; userMsg: string }) {
-    setThreadId((prev) => prev ?? data.threadId);
+  function handleSent(d: { assistantReply: string; threadId: string; userMsg: string }) {
+    setThreadId((prev) => prev ?? d.threadId);
     setMessages((prev) => [
       ...prev,
-      { id: crypto.randomUUID(), role: "user",      text: data.userMsg },
-      { id: crypto.randomUUID(), role: "assistant", text: data.assistantReply },
+      { id: crypto.randomUUID(), role: "user",      text: d.userMsg },
+      { id: crypto.randomUUID(), role: "assistant", text: d.assistantReply },
     ]);
   }
 
   return (
-    /* KHÔNG thay đổi wrapper bên ngoài của bạn – chỉ cần khung con này có h-full */
-    <div className="flex h-full flex-col">
-      {/* Danh sách tin nhắn chiếm toàn bộ chiều cao còn lại */}
-      <div className="flex-1 overflow-y-auto space-y-3 p-4">
-        {messages.map((m) => (
-          <div
-            key={m.id}
-            className={`max-w-[75%] rounded-lg px-3 py-2 text-sm ${
-              m.role === "user"
-                ? "ml-auto bg-violet-500 text-white"
-                : "mr-auto bg-muted"
-            }`}
-          >
-            {m.text}
-          </div>
-        ))}
-      </div>
+    <ChatLayout userId={userId}>
+      {/* children hiển thị bảng chat tạm ở trang /chat */}
+      <div className="flex h-full flex-col">
+        <div className="flex-1 space-y-3 overflow-y-auto p-4">
+          {messages.map((m) => (
+            <div
+              key={m.id}
+              className={`max-w-[75%] rounded-lg px-3 py-2 text-sm ${
+                m.role === "user"
+                  ? "ml-auto bg-violet-500 text-white"
+                  : "mr-auto bg-muted"
+              }`}
+            >
+              {m.text}
+            </div>
+          ))}
+        </div>
 
-      {/* Ô nhập luôn dính đáy – không margin-top, không margin-bottom trừ px */}
-      <div className="sticky bottom-0 bg-background">
-        <MessageInput
-          userId={null}
-          threadId={threadId}
-          onSent={handleSent}
-        />
+        <div className="sticky bottom-0 bg-background">
+          <MessageInput
+            userId={userId}
+            threadId={threadId}
+            onSent={handleSent}
+          />
+        </div>
       </div>
-    </div>
+    </ChatLayout>
   );
 }
