@@ -1,39 +1,44 @@
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 
-function makeClient(url: string, key: string, readOnly: boolean) {
+function makeClient(url: string, key: string,   /**/
+                    allowCookieWrite = false) { // 🔸 <— flag
   const store = cookies();
   return createServerClient(url, key, {
     cookies: {
       get   : (n: string) => store.get(n)?.value,
-      set   : readOnly ? () => {} : (n, v, o) => store.set({ name: n, value: v, ...o }),
-      remove: readOnly ? () => {} : (n, o) => store.set({ name: n, value: "", ...o }),
+      set   : allowCookieWrite ? (n, v, o) => store.set({ name: n, value: v, ...o }) : () => {},
+      remove: allowCookieWrite ? (n, o) => store.set({ name: n, value: "", ...o })    : () => {},
     },
   });
 }
 
-/* 🌟 1. Client cho người dùng – anon key (session sẽ hoạt động) */
+/* 1. Client người dùng – anon key (đọc & ghi localStorage, không ghi cookie server) */
 export function createSupabaseUserClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  return makeClient(url, key, false);
+  return makeClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    false,           // ⬅️ không ghi cookie
+  );
 }
 
-/* 🌟 2. Client admin – service-role key */
+/* 2. Client admin – service-role key (ghi DB, KHÔNG ghi cookie!) */
 export function createSupabaseAdminClient() {
-  const url = process.env.SUPABASE_URL!;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-  return makeClient(url, key, false);
+  return makeClient(
+    process.env.SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    false,           // ⬅️ quan trọng: không ghi cookie
+  );
 }
 
-/* 🌟 3. Read-only cho Server Component */
+/* 3. Read-only cho Server Component */
 export function createSupabaseReadOnly() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  return makeClient(url, key, true);
+  return makeClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    false,
+  );
 }
 
-/* alias cũ để không gãy code */
-export const createSupabaseRouteClient        = createSupabaseAdminClient;
-export const createSupabaseRouteServerClient  = createSupabaseAdminClient;
-export const createSupabaseServerClient       = createSupabaseAdminClient;
+/* alias giữ tương thích cũ */
+export const createSupabaseRouteClient = createSupabaseAdminClient;
