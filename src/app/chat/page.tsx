@@ -10,12 +10,10 @@ interface Msg {
 }
 
 export default function ChatIndex() {
-  const userId: string | null = null;          // lấy từ session nếu có
-  const [threadId, setThreadId] = useState<string>();
+  const userId: string | null = null;          // lấy từ session nếu đăng nhập
   const [messages, setMessages] = useState<Msg[]>([]);
 
   function handleSent(d: { assistantReply: string; threadId: string; userMsg: string }) {
-    setThreadId((prev) => prev ?? d.threadId);
     setMessages((prev) => [
       ...prev,
       { id: crypto.randomUUID(), role: "user",      text: d.userMsg },
@@ -25,7 +23,6 @@ export default function ChatIndex() {
 
   return (
     <ChatLayout userId={userId} onSent={handleSent}>
-      {/* hiển thị message list tạm thời ở trang index */}
       {messages.length === 0 ? (
         <p className="text-center text-sm text-muted-foreground">
           Chọn một cuộc trò chuyện ở bên trái hoặc tạo mới.

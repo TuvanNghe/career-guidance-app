@@ -3,7 +3,6 @@
 import { useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import useSWR from "swr";
-
 import MessageInput  from "./MessageInput";
 import HistoryList   from "./HistoryList";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -11,42 +10,35 @@ import { PlusCircle, Loader2, MessagesSquare } from "lucide-react";
 
 interface ChatLayoutProps {
   userId  : string | null;
-  children: React.ReactNode;                                // message list
-  onSent? : (d: { assistantReply: string; threadId: string; userMsg: string }) => void; // callback lên page
+  children: React.ReactNode;
+  onSent? : (d: { assistantReply: string; threadId: string; userMsg: string }) => void;
 }
 
-/* fetch threads */
+/* fetch */
 const fetchThreads = async (uid: string) => {
   const r = await fetch(`/api/chat/threads?userId=${uid}`);
   if (!r.ok) throw new Error("Cannot load threads");
-  return (await r.json()) as {
-    id        : string;
-    title     : string | null;
-    updated_at: string;
-  }[];
+  return (await r.json()) as { id: string; title: string | null; updated_at: string }[];
 };
 
 export default function ChatLayout({ userId, children, onSent }: ChatLayoutProps) {
-  const router     = useRouter();
-  const pathname   = usePathname();            // /chat hoặc /chat/<uuid>
-  const bottomRef  = useRef<HTMLDivElement>(null);
-  const activeId   = pathname.split("/").pop(); // <uuid> | "chat"
+  const router   = useRouter();
+  const pathname = usePathname();
+  const bottom   = useRef<HTMLDivElement>(null);
+  const activeId = pathname.split("/").pop();           // <uuid> | "chat"
 
-  /* threads */
   const { data: threads, isLoading, mutate } = useSWR(
     userId ? ["threads", userId] : null,
     () => fetchThreads(userId!)
   );
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [threads]);
+  useEffect(() => bottom.current?.scrollIntoView({ behavior: "smooth" }), [threads]);
 
   const openThread = (id: string) => router.push(`/chat/${id}`);
 
   return (
     <div className="grid min-h-[calc(100vh-48px)] grid-cols-[260px_1fr]">
-      {/* ───── Sidebar ───── */}
+      {/* ─ Sidebar ─ */}
       <aside className="flex h-full flex-col border-r bg-background">
         <header className="flex items-center justify-between border-b px-4 py-3 text-sm font-medium">
           <span className="inline-flex items-center gap-1">
@@ -86,11 +78,11 @@ export default function ChatLayout({ userId, children, onSent }: ChatLayoutProps
             />
           )}
 
-          <div ref={bottomRef} />
+          <div ref={bottom} />
         </ScrollArea>
       </aside>
 
-      {/* ───── Chat pane ───── */}
+      {/* ─ Chat pane ─ */}
       <section className="relative flex h-full flex-col bg-white">
         <div className="flex-1 overflow-y-auto space-y-4 px-4 py-6">{children}</div>
 
@@ -98,10 +90,10 @@ export default function ChatLayout({ userId, children, onSent }: ChatLayoutProps
           <MessageInput
             userId={userId}
             threadId={pathname === "/chat" ? undefined : activeId}
-            onSent={(data) => {
-              mutate();                // refresh sidebar
-              onSent?.(data);          // báo ngược ra page
-              if (pathname === "/chat") openThread(data.threadId);
+            onSent={(d) => {
+              mutate();              // update sidebar
+              onSent?.(d);           // báo lên page (nếu cần)
+              if (pathname === "/chat") openThread(d.threadId);
             }}
           />
         </div>
