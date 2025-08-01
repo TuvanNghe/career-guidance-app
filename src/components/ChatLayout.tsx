@@ -9,13 +9,13 @@ import HistoryList   from "./HistoryList";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { PlusCircle, Loader2, MessagesSquare } from "lucide-react";
 
-/* ---------- types ---------- */
 interface ChatLayoutProps {
   userId  : string | null;
-  children: React.ReactNode;
+  children: React.ReactNode;                                // message list
+  onSent? : (d: { assistantReply: string; threadId: string; userMsg: string }) => void; // callback lên page
 }
 
-/* ---------- load threads ---------- */
+/* fetch threads */
 const fetchThreads = async (uid: string) => {
   const r = await fetch(`/api/chat/threads?userId=${uid}`);
   if (!r.ok) throw new Error("Cannot load threads");
@@ -26,9 +26,9 @@ const fetchThreads = async (uid: string) => {
   }[];
 };
 
-export default function ChatLayout({ userId, children }: ChatLayoutProps) {
+export default function ChatLayout({ userId, children, onSent }: ChatLayoutProps) {
   const router     = useRouter();
-  const pathname   = usePathname();          // /chat  hoặc /chat/<uuid>
+  const pathname   = usePathname();            // /chat hoặc /chat/<uuid>
   const bottomRef  = useRef<HTMLDivElement>(null);
   const activeId   = pathname.split("/").pop(); // <uuid> | "chat"
 
@@ -45,9 +45,8 @@ export default function ChatLayout({ userId, children }: ChatLayoutProps) {
   const openThread = (id: string) => router.push(`/chat/${id}`);
 
   return (
-    /* chiều cao full màn + 2 cột */
     <div className="grid min-h-[calc(100vh-48px)] grid-cols-[260px_1fr]">
-      {/* ---------- SIDEBAR ---------- */}
+      {/* ───── Sidebar ───── */}
       <aside className="flex h-full flex-col border-r bg-background">
         <header className="flex items-center justify-between border-b px-4 py-3 text-sm font-medium">
           <span className="inline-flex items-center gap-1">
@@ -91,7 +90,7 @@ export default function ChatLayout({ userId, children }: ChatLayoutProps) {
         </ScrollArea>
       </aside>
 
-      {/* ---------- CHAT PANE ---------- */}
+      {/* ───── Chat pane ───── */}
       <section className="relative flex h-full flex-col bg-white">
         <div className="flex-1 overflow-y-auto space-y-4 px-4 py-6">{children}</div>
 
@@ -100,7 +99,8 @@ export default function ChatLayout({ userId, children }: ChatLayoutProps) {
             userId={userId}
             threadId={pathname === "/chat" ? undefined : activeId}
             onSent={(data) => {
-              mutate();
+              mutate();                // refresh sidebar
+              onSent?.(data);          // báo ngược ra page
               if (pathname === "/chat") openThread(data.threadId);
             }}
           />

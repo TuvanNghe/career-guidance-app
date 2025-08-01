@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import ChatLayout   from "@/components/ChatLayout";
-import MessageInput from "@/components/MessageInput";
+import ChatLayout from "@/components/ChatLayout";
 
 interface Msg {
   id   : string;
@@ -11,10 +10,7 @@ interface Msg {
 }
 
 export default function ChatIndex() {
-  /* nếu có Supabase session hãy lấy userId; demo để null */
-  const userId: string | null = null;
-
-  /* local preview (khi ở /chat, chưa có thread) */
+  const userId: string | null = null;          // lấy từ session nếu có
   const [threadId, setThreadId] = useState<string>();
   const [messages, setMessages] = useState<Msg[]>([]);
 
@@ -28,32 +24,26 @@ export default function ChatIndex() {
   }
 
   return (
-    <ChatLayout userId={userId}>
-      {/* children hiển thị bảng chat tạm ở trang /chat */}
-      <div className="flex h-full flex-col">
-        <div className="flex-1 space-y-3 overflow-y-auto p-4">
-          {messages.map((m) => (
-            <div
-              key={m.id}
-              className={`max-w-[75%] rounded-lg px-3 py-2 text-sm ${
-                m.role === "user"
-                  ? "ml-auto bg-violet-500 text-white"
-                  : "mr-auto bg-muted"
-              }`}
-            >
-              {m.text}
-            </div>
-          ))}
-        </div>
-
-        <div className="sticky bottom-0 bg-background">
-          <MessageInput
-            userId={userId}
-            threadId={threadId}
-            onSent={handleSent}
-          />
-        </div>
-      </div>
+    <ChatLayout userId={userId} onSent={handleSent}>
+      {/* hiển thị message list tạm thời ở trang index */}
+      {messages.length === 0 ? (
+        <p className="text-center text-sm text-muted-foreground">
+          Chọn một cuộc trò chuyện ở bên trái hoặc tạo mới.
+        </p>
+      ) : (
+        messages.map((m) => (
+          <div
+            key={m.id}
+            className={`max-w-[75%] rounded-lg px-3 py-2 text-sm ${
+              m.role === "user"
+                ? "ml-auto bg-violet-500 text-white"
+                : "mr-auto bg-muted"
+            }`}
+          >
+            {m.text}
+          </div>
+        ))
+      )}
     </ChatLayout>
   );
 }
