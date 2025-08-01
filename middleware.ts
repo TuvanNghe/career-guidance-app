@@ -1,44 +1,79 @@
-// middleware.ts  – gộp cả CLEAN + PAYWALL
 import { NextRequest, NextResponse } from "next/server";
 import { createMiddlewareClient } from "@supabase/auth-helpers-nextjs";
 import { STATUS } from "@/lib/constants";
 
-// 🔑 paths yêu cầu đăng nhập + đã thanh toán
-export const config = {
-  matcher: ["/mbti/:path*", "/holland/:path*", "/knowdell/:path*"],
-};
+/* ────────────────────────────────────────────────────────────── *
+ * 1.  MIDDLEWARE chạy cho TẤT CẢ request                        *
+ *     – dọn cookie Supabase lỗi (giá trị không phải JSON)       *
+ * 2.  Nếu URL thuộc gói thu phí, kiểm tra phiên & thanh toán    *
+ * ────────────────────────────────────────────────────────────── */
 
 export async function middleware(req: NextRequest) {
-  /* ---------- 0.   XÓA COOKIE HỎNG (nếu còn) ---------- */
   const res = NextResponse.next();
-  for (const c of req.cookies.getAll()) {
-    const v = decodeURIComponent(c.value);
-    if (c.name.startsWith("sb-") && (v.startsWith("b_") || !isJson(v))) {
-      res.cookies.set({ name: c.name, value: "", path: "/", maxAge: 0 });
+
+  /* ---------- 0.   XÓA COOKIE SUPABASE HỎNG ---------- */
+  for (const { name, value } of req.cookies.getAll()) {
+    const val = decodeURIComponent(value);
+    if (name.startsWith("sb-") && !isValidJson(val)) {
+      res.cookies.set({ name, value: "", path: "/", maxAge: 0 }); // xoá
     }
   }
 
-  /* ---------- 1.   KIỂM TRA PHIÊN NGƯỜI DÙNG ---------- */
-  const supabase = createMiddlewareClient({ req, res });
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) return NextResponse.redirect(new URL("/signup", req.url));
+  /* ---------- 1.   CHỈ ÁP DỤNG PAYWALL KHI CẦN ---------- */
+  const { pathname } = req.nextUrl;
+  const isProtected =
+    pathname.startsWith("/mbti") ||
+    pathname.startsWith("/holland") ||
+    pathname.startsWith("/knowdell");
 
-  /* ---------- 2.   KIỂM TRA THANH TOÁN ---------- */
-  const path = req.nextUrl.pathname.startsWith("/mbti")
-      ? "mbti" : req.nextUrl.pathname.startsWith("/holland")
-      ? "holland" : "knowdell";
+  if (!isProtected) return res;          // 🔚 trang miễn phí → thoát sớm
+
+  /* ---------- 2.   KIỂM TRA PHIÊN NGƯỜI DÙNG ---------- */
+  const supabase = createMiddlewareClient({ req, res });
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (!session) {
+    return NextResponse.redirect(new URL("/signup", req.url));
+  }
+
+  /* ---------- 3.   KIỂM TRA THANH TOÁN ---------- */
+  const product = pathname.startsWith("/mbti")
+    ? "mbti"
+    : pathname.startsWith("/holland")
+    ? "holland"
+    : "knowdell";
 
   const { data: payment } = await supabase
-      .from("payments").select("id")
-      .eq("user_id", session.user.id)
-      .eq("product", path)
-      .eq("status", STATUS.PAID)
-      .maybeSingle();
+    .from("payments")
+    .select("id")
+    .eq("user_id", session.user.id)
+    .eq("product", product)
+    .eq("status", STATUS.PAID)
+    .maybeSingle();
 
-  if (!payment) return NextResponse.redirect(
-      new URL(`/payment?product=${path}`, req.url));
+  if (!payment) {
+    return NextResponse.redirect(
+      new URL(`/payment?product=${product}`, req.url),
+    );
+  }
 
+  /* ---------- 4.   ĐÃ ĐỦ ĐIỀU KIỆN ---------- */
   return res;
 }
 
-function isJson(v: string) { try { JSON.parse(v); return true; } catch { return false; } }
+/* Chạy middleware cho **mọi** đường dẫn (trừ assets tĩnh) */
+export const config = {
+  matcher: ["/((?!_next/|favicon.ico|images|fonts).*)"],
+};
+
+/* ---------- helper ---------- */
+function isValidJson(v: string) {
+  try {
+    JSON.parse(v);
+    return true;
+  } catch {
+    return false;
+  }
+}
