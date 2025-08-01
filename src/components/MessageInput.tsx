@@ -5,45 +5,42 @@ import { ArrowUpCircle } from "lucide-react";
 
 /* ---------- props ---------- */
 interface MessageInputProps {
-  userId   : string | null;                 // Supabase UID (có thể null)
-  threadId?: string;                       // uuid của cuộc trò chuyện (undefined ở msg đầu)
-  onSent?  : (newThreadId: string) => void; // bắn ra threadId vừa tạo
+  userId   : string | null;
+  threadId?: string;
+  onSent   : (data: { assistantReply: string; threadId: string; userMsg: string }) => void;
 }
 
-/* regex xác thực uuid v4 */
+/* uuid v4 checker */
 const isUUIDv4 = (s: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s);
 
-/* ---------- component ---------- */
 export default function MessageInput({ userId, threadId, onSent }: MessageInputProps) {
   const [value,   setValue]   = useState("");
   const [sending, setSending] = useState(false);
   const inputRef              = useRef<HTMLInputElement>(null);
 
-  /* ---------- submit ---------- */
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!value.trim() || sending) return;
 
     setSending(true);
     try {
-      /* build payload */
       const payload: Record<string, any> = {
         userId,
         content: value.trim(),
       };
       if (threadId && isUUIDv4(threadId)) payload.threadId = threadId;
 
-      /* gửi API */
       const res  = await fetch("/api/chat/send", {
         method : "POST",
         headers: { "Content-Type": "application/json" },
         body   : JSON.stringify(payload),
       });
-      const data = await res.json();       // { assistantReply, threadId }
+      if (!res.ok) throw new Error(`API ${res.status}`);
+      const data = await res.json(); // { assistantReply, threadId }
 
-      /* callback cho component cha */
-      onSent?.(data.threadId);
+      /* gửi ngược cho component cha */
+      onSent({ ...data, userMsg: value.trim() });
 
       setValue("");
       inputRef.current?.focus();
@@ -52,7 +49,6 @@ export default function MessageInput({ userId, threadId, onSent }: MessageInputP
     }
   }
 
-  /* ---------- UI ---------- */
   return (
     <form
       onSubmit={handleSubmit}
