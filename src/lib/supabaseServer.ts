@@ -1,44 +1,39 @@
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 
-/* -------------------------------------------------------------
- * 1. Hàm factory chung
- * ------------------------------------------------------------*/
 function makeClient(url: string, key: string, readOnly: boolean) {
   const store = cookies();
-
   return createServerClient(url, key, {
     cookies: {
       get   : (n: string) => store.get(n)?.value,
-      /* ghi/xoá cookie chỉ khi NOT readOnly */
       set   : readOnly ? () => {} : (n, v, o) => store.set({ name: n, value: v, ...o }),
       remove: readOnly ? () => {} : (n, o) => store.set({ name: n, value: "", ...o }),
     },
   });
 }
 
-/* -------------------------------------------------------------
- * 2. Helpers
- * ------------------------------------------------------------*/
-
-/* a. Read-write  ➜  dùng trong Route-handler / Server-action */
-export function createSupabaseRouteClient() {
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error("Missing Supabase env vars");
+/* 🌟 1. Client cho người dùng – anon key (session sẽ hoạt động) */
+export function createSupabaseUserClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
   return makeClient(url, key, false);
 }
 
-/* b. Read-only  ➜  dùng trong Server Component / Layout */
+/* 🌟 2. Client admin – service-role key */
+export function createSupabaseAdminClient() {
+  const url = process.env.SUPABASE_URL!;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+  return makeClient(url, key, false);
+}
+
+/* 🌟 3. Read-only cho Server Component */
 export function createSupabaseReadOnly() {
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error("Missing Supabase env vars");
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
   return makeClient(url, key, true);
 }
 
-/* -------------------------------------------------------------
- * 3. Backward-compat aliases  (giữ tên cũ để code cũ không lỗi)
- * ------------------------------------------------------------*/
-export const createSupabaseServerClient       = createSupabaseRouteClient;
-export const createSupabaseRouteServerClient  = createSupabaseRouteClient;
+/* alias cũ để không gãy code */
+export const createSupabaseRouteClient        = createSupabaseAdminClient;
+export const createSupabaseRouteServerClient  = createSupabaseAdminClient;
+export const createSupabaseServerClient       = createSupabaseAdminClient;
