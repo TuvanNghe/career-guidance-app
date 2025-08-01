@@ -1,16 +1,9 @@
-export const dynamic = "force-dynamic";
+// src/app/chat/layout.tsx
+export const dynamic = "force-dynamic";   // giữ dòng này
 
 import type { ReactNode } from "react";
-import SupabaseProvider from "@/providers/SupabaseProvider";
-import { createSupabaseReadOnly } from "@/lib/supabaseServer";   // ⬅️
 
-export default async function ChatLayout({ children }: { children: ReactNode }) {
-  const supabase = createSupabaseReadOnly();                    // ⬅️
-  const { data: { session } } = await supabase.auth.getSession();
-
-  return (
-    <SupabaseProvider initialSession={session}>
-      {children}
-    </SupabaseProvider>
-  );
+export default function ChatLayout({ children }: { children: ReactNode }) {
+  /* chỉ return children – Provider đã ở Root */
+  return children;
 }

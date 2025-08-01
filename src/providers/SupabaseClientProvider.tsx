@@ -1,10 +1,11 @@
+// src/providers/SupabaseClientProvider.tsx
 "use client";
 
 import { useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import { SessionContextProvider } from "@supabase/auth-helpers-react";
 
-/** Bọc toàn bộ ứng dụng – duy trì 1 Supabase client duy nhất */
+/** Provider cấp 1 Supabase client duy nhất cho toàn bộ ứng dụng */
 export default function SupabaseClientProvider({
   children,
 }: {
