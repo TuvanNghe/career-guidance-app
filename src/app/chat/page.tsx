@@ -1,34 +1,33 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import MessageInput from "@/components/MessageInput";
 
-/* Kiểu đơn giản của message */
 interface Msg {
-  id    : string;        // random để React key
-  role  : "user" | "assistant";
-  text  : string;
+  id   : string;
+  role : "user" | "assistant";
+  text : string;
 }
 
 export default function ChatPage() {
   const [threadId, setThreadId] = useState<string>();
   const [messages, setMessages] = useState<Msg[]>([]);
 
-  /* sau khi MessageInput gửi thành công */
+  /* callback khi gửi thành công */
   function handleSent(data: { assistantReply: string; threadId: string; userMsg: string }) {
-    setThreadId((prev) => prev ?? data.threadId); // lưu uuid lần đầu
+    setThreadId((prev) => prev ?? data.threadId);
     setMessages((prev) => [
       ...prev,
-      { id: crypto.randomUUID(), role: "user",       text: data.userMsg },
-      { id: crypto.randomUUID(), role: "assistant",  text: data.assistantReply },
+      { id: crypto.randomUUID(), role: "user",      text: data.userMsg },
+      { id: crypto.randomUUID(), role: "assistant", text: data.assistantReply },
     ]);
   }
 
-  /* UI */
   return (
+    /* KHÔNG thay đổi wrapper bên ngoài của bạn – chỉ cần khung con này có h-full */
     <div className="flex h-full flex-col">
-      {/* --------- message list --------- */}
-      <div className="flex-1 space-y-3 overflow-y-auto p-4">
+      {/* Danh sách tin nhắn chiếm toàn bộ chiều cao còn lại */}
+      <div className="flex-1 overflow-y-auto space-y-3 p-4">
         {messages.map((m) => (
           <div
             key={m.id}
@@ -43,12 +42,14 @@ export default function ChatPage() {
         ))}
       </div>
 
-      {/* --------- input --------- */}
-      <MessageInput
-        userId={null /* hoặc session?.user.id */}
-        threadId={threadId}
-        onSent={handleSent}
-      />
+      {/* Ô nhập luôn dính đáy – không margin-top, không margin-bottom trừ px */}
+      <div className="sticky bottom-0 bg-background">
+        <MessageInput
+          userId={null}
+          threadId={threadId}
+          onSent={handleSent}
+        />
+      </div>
     </div>
   );
 }
