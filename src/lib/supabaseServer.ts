@@ -30,8 +30,7 @@ function makeClient(
 export function createSupabaseUserClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  if (!url || !key) throw new Error("Missing Supabase anon env vars");
-  return makeClient(url, key, false);          // không ghi cookie server
+  return makeClient(url, key, /** allowCookieWrite */ true);
 }
 
 /* ------------------------------------------------------------ */
