@@ -4,6 +4,7 @@
 import Link from "next/link";
 import { SERVICE, PRICES } from "@/lib/constants";
 
+export const dynamic = "force-dynamic";
 /* Counter ô thống kê nhỏ */
 const Counter = ({ value, label }: { value: string; label: string }) => (
   <div className="flex flex-col items-center gap-1">

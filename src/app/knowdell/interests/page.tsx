@@ -1,8 +1,8 @@
 "use client";
+export const dynamic = "force-dynamic";
 
+import { useSupabaseClient } from "@supabase/auth-helpers-react";
 import { useEffect, useState } from "react";
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
-import { useRouter } from "next/navigation";
 
 type Int = { interest_key: string; vi: string };
 const LIMIT = 20;

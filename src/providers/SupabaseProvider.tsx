@@ -1,27 +1,39 @@
+// src/providers/SupabaseProvider.tsx
 "use client";
+
 import { ReactNode, useEffect, useState } from "react";
 import { SessionContextProvider } from "@supabase/auth-helpers-react";
-import { createSupabaseBrowserClient } from "@/lib/supabaseBrowser";
+import { createBrowserClient } from "@supabase/ssr";
 
-/* xoá mọi sb-… cookie hỏng trước khi tạo client */
-function purgeInvalidCookies() {
-  document.cookie.split(";").forEach(c => {
+function purgeBadCookies() {
+  document.cookie.split(";").forEach((c) => {
     const [name, raw] = c.trim().split("=");
     if (!name?.startsWith("sb-")) return;
-    try { JSON.parse(decodeURIComponent(raw)); }
-    catch { document.cookie = `${name}=; Path=/; Max-Age=0; SameSite=Lax`; }
+    try { JSON.parse(decodeURIComponent(raw)); }          // hợp lệ
+    catch { document.cookie = `${name}=;Max-Age=0;Path=/`; } // xoá
   });
 }
 
 export default function SupabaseProvider({ children }: { children: ReactNode }) {
   const [client, setClient] = useState<any | null>(null);
 
+  /* chỉ chạy ở BROWSER */
   useEffect(() => {
-    purgeInvalidCookies();
-    setClient(createSupabaseBrowserClient());
+    purgeBadCookies();
+    setClient(
+      createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        { auth: { persistSession: true, autoRefreshToken: true } },
+      ),
+    );
   }, []);
 
-  if (!client) return null;             // tránh flash trắng
+  if (!client) return null;           // 👈  SSR không tạo client, tránh lỗi
 
-  return <SessionContextProvider supabaseClient={client}>{children}</SessionContextProvider>;
+  return (
+    <SessionContextProvider supabaseClient={client}>
+      {children}
+    </SessionContextProvider>
+  );
 }
