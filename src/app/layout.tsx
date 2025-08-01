@@ -1,10 +1,8 @@
-/* Root layout – server component */
 import type { ReactNode } from "react";
 import "./globals.css";
-
-import Header from "../components/Header";
-import Footer from "../components/Footer";
-import SupabaseClientProvider from "@/providers/SupabaseClientProvider";  // ✨
+import SupabaseProvider from "@/providers/SupabaseProvider";   // 👈 dùng provider mới
+import Header from "@/components/Header";
+import Footer from "@/components/Footer";
 
 export const metadata = {
   title: "Hướng nghiệp AI | CareerAI",
@@ -14,14 +12,12 @@ export const metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="vi">
-      <body className="min-h-screen flex flex-col bg-gray-50 antialiased">
-        <SupabaseClientProvider>
+      <body className="bg-gray-50 antialiased">
+        <SupabaseProvider>
           <Header />
-
-          <main className="flex-1 pt-header">{children}</main>
-
+          <main className="pt-header min-h-screen">{children}</main>
           <Footer />
-        </SupabaseClientProvider>
+        </SupabaseProvider>
       </body>
     </html>
   );

@@ -1,62 +1,34 @@
+/* -------------------  Unified server-side helpers  ------------------- */
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 
-/* ------------------------------------------------------------ */
-/*  Factory chung                                                */
-/* ------------------------------------------------------------ */
-function makeClient(
-  url: string,
-  key: string,
-  allowCookieWrite = false,           // ❌ KHÔNG ghi cookie nếu = false
-) {
-  const store = cookies();
-
-  return createServerClient(url, key, {
-    cookies: {
-      get   : (n: string) => store.get(n)?.value,
-      set   : allowCookieWrite
-        ? (n, v, o) => store.set({ name: n, value: v, ...o })
-        : () => {},
-      remove: allowCookieWrite
-        ? (n, o) => store.set({ name: n, value: "", ...o })
-        : () => {},
-    },
-  });
+/** create server client with cookie store (optionally read-only) */
+function makeClient(readOnly = false) {
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    readOnly
+      ? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      : process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    {
+      cookies: {
+        get: n => cookies().get(n)?.value,
+        set: readOnly ? () => undefined : (n, v, o) => cookies().set({ name: n, value: v, ...o }),
+        remove: readOnly ? () => undefined : n => cookies().set({ name: n, value: "", path: "/", maxAge: 0 }),
+      },
+    }
+  );
 }
 
-/* ------------------------------------------------------------ */
-/* 1. CLIENT NGƯỜI DÙNG – anon key (kiểm tra session, RLS)       */
-/* ------------------------------------------------------------ */
+/* 1. client dành cho người dùng -- **anon key** (có session/RLS) */
 export function createSupabaseUserClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  return makeClient(url, key, /** allowCookieWrite */ true);
+  return makeClient(true);
 }
 
-/* ------------------------------------------------------------ */
-/* 2. CLIENT ADMIN – service-role key (ghi DB, bypass RLS)       */
-/*    KHÔNG ghi cookie xuống browser → tránh lỗi parse JSON      */
-/* ------------------------------------------------------------ */
+/* 2. client admin -- **service-role** (ghi DB / bypass RLS) */
 export function createSupabaseAdminClient() {
-  const url = process.env.SUPABASE_URL!;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-  if (!url || !key) throw new Error("Missing Supabase service-role env vars");
-  return makeClient(url, key, false);          // allowCookieWrite = false
+  return makeClient(false);
 }
 
-/* ------------------------------------------------------------ */
-/* 3. READ-ONLY cho Server Component / Layout                    */
-/* ------------------------------------------------------------ */
-export function createSupabaseReadOnly() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  if (!url || !key) throw new Error("Missing Supabase anon env vars");
-  return makeClient(url, key, true);           // readOnly → set/remove no-op
-}
-
-/* ------------------------------------------------------------ */
-/* 4. ALIAS GIỮ TƯƠNG THÍCH CODE CŨ – XÓA SAU KHI REFECTOR XONG  */
-/* ------------------------------------------------------------ */
-export const createSupabaseRouteServerClient = createSupabaseAdminClient;
-export const createSupabaseServerClient      = createSupabaseAdminClient;
-export const createSupabaseRouteClient       = createSupabaseAdminClient;
+/* ---------- Back-compat aliases cho code cũ ---------- */
+export const createSupabaseServerClient = createSupabaseUserClient;
+export const createSupabaseRouteServerClient = createSupabaseUserClient;
