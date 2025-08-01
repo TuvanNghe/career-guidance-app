@@ -50,7 +50,7 @@ export default function ChatLayout({ userId, children }: ChatLayoutProps) {
 
   return (
     /* 48px là chiều cao header cố định của site */
-    <div className="grid h-[calc(100vh-48px)] grid-cols-[260px_1fr]">
+    <div className="grid flex-1 grid-cols-[260px_1fr]">
       {/* ============ SIDEBAR ============ */}
       <aside className="flex h-full flex-col border-r bg-background">
         <header className="flex items-center justify-between border-b px-4 py-3 text-sm font-medium">
