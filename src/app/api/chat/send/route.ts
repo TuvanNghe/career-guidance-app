@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import OpenAI from "openai";
-import { createSupabaseServerClient } from "@/lib/supabaseServer";
+import { createSupabaseRouteClient } from "@/lib/supabaseServer";
 
 export const runtime = "edge";          // Vercel Edge Function
 
@@ -31,7 +31,7 @@ export async function POST(req: Request) {
   /* bảo đảm threadId hợp lệ */
   const threadId = isUUIDv4(body.threadId) ? body.threadId! : crypto.randomUUID();
 
-  const supabase = createSupabaseServerClient();
+  const supabase = createSupabaseRouteClient();
   const openai   = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
 
   /* upsert thread */
