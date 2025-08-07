@@ -146,7 +146,7 @@ export default function PaymentContent({ product }: Props) {
 
   return (
     <div className="mx-auto max-w-sm space-y-6 text-center">
-      <h2 className="text-xl font-semibold">
+      <h2 className="mt-9 text-xl font-semibold">
         Thanh&nbsp;toán gói {product.toUpperCase()}
       </h2>
 

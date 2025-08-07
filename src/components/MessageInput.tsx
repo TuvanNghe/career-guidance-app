@@ -3,47 +3,49 @@
 import { useState, useRef, FormEvent } from "react";
 import { ArrowUpCircle } from "lucide-react";
 
-/* ---------- props ---------- */
 interface MessageInputProps {
-  userId   : string | null;                 // Supabase UID (có thể null)
-  threadId?: string;                       // uuid của cuộc trò chuyện (undefined ở msg đầu)
-  onSent?  : (newThreadId: string) => void; // bắn ra threadId vừa tạo
+  userId   : string | null;
+  threadId?: string;
+  // Bây giờ onSent nhận thêm cả userText
+  onSent?  : (
+    newThreadId: string,
+    assistantReply: string,
+    userText: string
+  ) => void;
 }
 
-/* regex xác thực uuid v4 */
 const isUUIDv4 = (s: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s);
 
-/* ---------- component ---------- */
-export default function MessageInput({ userId, threadId, onSent }: MessageInputProps) {
-  const [value,   setValue]   = useState("");
+export default function MessageInput({
+  userId,
+  threadId,
+  onSent
+}: MessageInputProps) {
+  const [value, setValue] = useState("");
   const [sending, setSending] = useState(false);
-  const inputRef              = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  /* ---------- submit ---------- */
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!value.trim() || sending) return;
+    const text = value.trim();
+    if (!text || sending) return;
 
     setSending(true);
     try {
-      /* build payload */
-      const payload: Record<string, any> = {
-        userId,
-        content: value.trim(),
-      };
+      // build payload
+      const payload: Record<string, any> = { userId, content: text };
       if (threadId && isUUIDv4(threadId)) payload.threadId = threadId;
 
-      /* gửi API */
-      const res  = await fetch("/api/chat/send", {
-        method : "POST",
+      const res = await fetch("/api/chat/send", {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body   : JSON.stringify(payload),
+        body: JSON.stringify(payload)
       });
-      const data = await res.json();       // { assistantReply, threadId }
+      const { threadId: newId, content: assistantReply } = await res.json();
 
-      /* callback cho component cha */
-      onSent?.(data.threadId);
+      // gọi callback với đủ 3 tham số
+      onSent?.(newId, assistantReply, text);
 
       setValue("");
       inputRef.current?.focus();
@@ -52,7 +54,6 @@ export default function MessageInput({ userId, threadId, onSent }: MessageInputP
     }
   }
 
-  /* ---------- UI ---------- */
   return (
     <form
       onSubmit={handleSubmit}
@@ -74,7 +75,7 @@ export default function MessageInput({ userId, threadId, onSent }: MessageInputP
 
       <button
         type="submit"
-        disabled={sending || !value.trim()}
+        disabled={!value.trim() || sending}
         className={`inline-flex h-7 w-7 items-center justify-center rounded-full transition-colors ${
           sending || !value.trim()
             ? "cursor-not-allowed bg-muted text-muted-foreground"
