@@ -4,14 +4,14 @@ import { useState, useRef, FormEvent } from "react";
 import { ArrowUpCircle } from "lucide-react";
 
 interface MessageInputProps {
-  userId   : string | null;
+  userId: string | null;
   threadId?: string;
-  // Bây giờ onSent nhận thêm cả userText
-  onSent?  : (
-    newThreadId: string,
-    assistantReply: string,
-    userText: string
-  ) => void;
+  remaining?: number; // số tin còn lại
+  limit?: number;     // tổng quota
+  // Gọi ngay khi user bấm gửi (để hiển thị liền) — truyền kèm localId
+  onUserSend?: (userText: string, localId: number) => void;
+  // Gọi sau khi API trả về — truyền kèm localId để thay đúng placeholder
+  onSent?: (newThreadId: string, assistantReply: string, localId: number) => void;
 }
 
 const isUUIDv4 = (s: string) =>
@@ -20,7 +20,10 @@ const isUUIDv4 = (s: string) =>
 export default function MessageInput({
   userId,
   threadId,
-  onSent
+  remaining = 100,
+  limit = 100,
+  onUserSend,
+  onSent,
 }: MessageInputProps) {
   const [value, setValue] = useState("");
   const [sending, setSending] = useState(false);
@@ -30,57 +33,79 @@ export default function MessageInput({
     e.preventDefault();
     const text = value.trim();
     if (!text || sending) return;
+    if (remaining <= 0) return; // hết quota → không gửi
+
+    // Tạo id tạm cho lần gửi này để map placeholder
+    const localId = Date.now() + Math.floor(Math.random() * 1000);
+
+    // 1) ĐẨY NGAY tin nhắn user + placeholder lên khung to
+    onUserSend?.(text, localId);
+
+    // 2) XÓA input ngay
+    setValue("");
+    inputRef.current?.focus();
 
     setSending(true);
     try {
-      // build payload
       const payload: Record<string, any> = { userId, content: text };
       if (threadId && isUUIDv4(threadId)) payload.threadId = threadId;
 
       const res = await fetch("/api/chat/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
       });
+
+      if (!res.ok) {
+        // quota hoặc lỗi khác
+        let msg = "Xin lỗi, bạn chưa đăng nhập!";
+        try {
+          const j = await res.json();
+          if (j?.message) msg = j.message;
+        } catch {}
+        onSent?.(threadId ?? "", msg, localId);
+        return;
+      }
+
       const { threadId: newId, content: assistantReply } = await res.json();
-
-      // gọi callback với đủ 3 tham số
-      onSent?.(newId, assistantReply, text);
-
-      setValue("");
-      inputRef.current?.focus();
+      onSent?.(newId, assistantReply, localId);
+    } catch (err) {
+      console.error("Send message failed:", err);
+      onSent?.(threadId ?? "", "Xin lỗi, đang gặp sự cố. Liên hệ quản trị viên hoặc Bạn thử lại giúp mình nhé!", localId);
     } finally {
       setSending(false);
     }
   }
 
+  const disabled = sending || !value.trim() || remaining <= 0;
+
   return (
     <form
       onSubmit={handleSubmit}
-      className="mx-4 mb-4 flex items-center gap-2 rounded-full border bg-white px-4 py-2 shadow-sm"
+      className="mx-4 mb-4 flex items-center gap-3 rounded-full border bg-white px-4 py-2 shadow-sm"
     >
       <input
         ref={inputRef}
         value={value}
         onChange={(e) => setValue(e.target.value)}
-        placeholder="Hỏi huongnghiep.ai"
+        placeholder={
+          remaining > 0 ? "Hỏi huongnghiep.ai" : `Bạn đã dùng hết ${limit} tin nhắn`
+        }
         className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
       />
 
-      {value && (
-        <span className="rounded-full bg-violet-500 px-2 py-0.5 text-xs font-medium text-white">
-          {value.length}
-        </span>
-      )}
+      <span className={`text-[11px] ${remaining <= 5 ? "text-red-600" : "text-muted-foreground"} shrink-0`}>
+        {Math.max(remaining, 0)}/{limit}
+      </span>
 
       <button
         type="submit"
-        disabled={!value.trim() || sending}
+        disabled={disabled}
         className={`inline-flex h-7 w-7 items-center justify-center rounded-full transition-colors ${
-          sending || !value.trim()
-            ? "cursor-not-allowed bg-muted text-muted-foreground"
-            : "bg-violet-500 text-white hover:bg-violet-600"
+          disabled ? "cursor-not-allowed bg-muted text-muted-foreground" : "bg-violet-500 text-white hover:bg-violet-600"
         }`}
+        aria-label="Gửi"
+        title={remaining <= 0 ? "Bạn đã dùng hết quota" : "Gửi"}
       >
         <ArrowUpCircle className="h-5 w-5" />
       </button>

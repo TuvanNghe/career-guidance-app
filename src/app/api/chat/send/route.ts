@@ -12,6 +12,8 @@ const Body = z.object({
   content: z.string().min(1),
 });
 
+const MESSAGE_LIMIT = Number(process.env.QUOTA_MESSAGE_LIMIT ?? 100);
+
 // ---- Heuristic: nhận diện câu hỏi follow-up hẹp/ngắn (trả lời đúng trọng tâm)
 function isNarrowFollowUp(input: string) {
   const q = (input || "").trim().toLowerCase();
@@ -54,6 +56,36 @@ export async function POST(req: Request) {
     if (!error) userId = data.user?.id ?? null;
   } catch {}
 
+  // 3.1) Kiểm tra quota TRƯỚC khi lưu
+  let used = 0;
+  if (userId) {
+    const { count } = await supabase
+      .from("chat_messages")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("role", "user");
+    used = count ?? 0;
+  } else if (incomingThreadId) {
+    // Với khách (không có userId), giới hạn theo thread
+    const { count } = await supabase
+      .from("chat_messages")
+      .select("id", { count: "exact", head: true })
+      .eq("thread_id", incomingThreadId)
+      .eq("role", "user");
+    used = count ?? 0;
+  }
+  if (used >= MESSAGE_LIMIT) {
+    return NextResponse.json(
+      {
+        error: "QUOTA_EXCEEDED",
+        message: `Bạn đã dùng hết ${MESSAGE_LIMIT} tin nhắn. Vui lòng mua thêm gói để tiếp tục.`,
+        limit: MESSAGE_LIMIT,
+        used,
+      },
+      { status: 403 }
+    );
+  }
+
   // 4) Create / reuse thread
   let threadId = incomingThreadId;
   if (!threadId) {
@@ -70,6 +102,21 @@ export async function POST(req: Request) {
       );
     }
     threadId = data.id;
+  } else if (userId) {
+    // nếu thread cũ chưa có user, claim về user hiện tại
+    await supabase
+      .from("chat_threads")
+      .update({ user_id: userId })
+      .eq("id", threadId)
+      .is("user_id", null);
+
+    // 🧩 Backfill user_id cho các tin nhắn cũ role=user thuộc thread này
+    await supabase
+      .from("chat_messages")
+      .update({ user_id: userId })
+      .eq("thread_id", threadId)
+      .is("user_id", null)
+      .eq("role", "user");
   }
 
   // 5) Save user message
@@ -79,6 +126,12 @@ export async function POST(req: Request) {
     role: "user",
     content: userQuestion,
   });
+
+// ⬇⬇⬇ THÊM đoạn này NGAY SAU khi insert tin nhắn user
+  await supabase
+    .from("chat_threads")
+    .update({ updated_at: new Date().toISOString() })
+    .eq("id", threadId);
 
   // 6) Load full history (newest first)
   const { data: rawHistory } = await supabase

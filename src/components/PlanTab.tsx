@@ -5,6 +5,7 @@
 
 import { useState, useTransition } from "react"
 import GanttMini, { Action }       from "@/components/GanttMini"
+import { generateId }              from "@/lib/utils"
 
 type SortKey = "what" | "who" | "deadline" | "status"
 
@@ -79,6 +80,16 @@ export default function PlanTab ({ actions }: { actions: Action[] }) {
         setActs(prev => [
           ...prev,
           { id: crypto.randomUUID(), what, who, deadline, done: false },
+        ])
+        setActs(prev => [
+          ...prev,
+          {
+            id: generateId(),    // ← dùng fallback an toàn
+            what,
+            who,
+            deadline,
+            done: false,
+          },
         ])
         e.currentTarget.reset()
       }

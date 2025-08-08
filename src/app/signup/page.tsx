@@ -1,20 +1,37 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useEffect, useRef } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createBrowserSupabaseClient } from "@supabase/auth-helpers-nextjs";
 import { Auth } from "@supabase/auth-ui-react";
 import { ThemeSupa } from "@supabase/auth-ui-shared";
 
 export default function SignUpPage() {
   const router = useRouter();
+  const params = useSearchParams();
+  const redirectTo = params.get("redirectTo") || "/"; // fallback
   const supabase = createBrowserSupabaseClient();
+  const redirectedRef = useRef(false);
 
-  // Khi trạng thái auth thay đổi (login thành công), redirect về Home
-  supabase.auth.onAuthStateChange((event, session) => {
-    if (session) {
-      router.replace("/");
-    }
-  });
+  useEffect(() => {
+    // If already logged in, bounce immediately
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session && !redirectedRef.current) {
+        redirectedRef.current = true;
+        router.replace(redirectTo);
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_evt, session) => {
+      if (session && !redirectedRef.current) {
+        redirectedRef.current = true;
+        router.replace(redirectTo);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [redirectTo]);
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 pt-24">
@@ -23,25 +40,15 @@ export default function SignUpPage() {
         <Auth
           supabaseClient={supabase}
           providers={["google", "facebook"]}
-          magicLink={false}         // false để dùng user+pass hoặc social, bạn có thể bật thành true nếu muốn only magic link
+          magicLink={false}
           socialLayout="horizontal"
           appearance={{
             theme: ThemeSupa,
-            variables: {
-              default: {
-                colors: {
-                  brand: "#EFD90C",         // màu brand (nút Đăng ký)
-                  brandAccent: "#FFC40C",   // hover
-                },
-              },
-            },
+            variables: { default: { colors: { brand: "#EFD90C", brandAccent: "#FFC40C" } } },
           }}
           localization={{
             lang: "vi",
-            variables: {
-              sign_up: { button_label: "Tạo tài khoản" },
-              sign_in: { button_label: "Đăng nhập" },
-            },
+            variables: { sign_up: { button_label: "Tạo tài khoản" }, sign_in: { button_label: "Đăng nhập" } },
           }}
         />
       </div>

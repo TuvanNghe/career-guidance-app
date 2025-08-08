@@ -5,8 +5,9 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { Bars3Icon, XMarkIcon } from "@heroicons/react/24/outline";
+import LoginLink from "@/components/auth/LoginLink";
 
 const MENU = [
   { label: "MBTI", href: "/mbti" },
@@ -19,18 +20,39 @@ const MENU = [
 export default function Header() {
   const supabase = createClientComponentClient();
   const router = useRouter();
+  const pathname = usePathname();
   const [user, setUser] = useState<any>(null);
   const [menuOpen, setMenuOpen] = useState(false);
 
+  // Đường hiện tại để redirect về đúng trang sau đăng nhập
+  const redirectTo = pathname || "/";
+
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setUser(data.user));
+    let mounted = true;
+
+    // Lấy user 1 lần khi mount
+    supabase.auth.getUser().then(({ data }) => {
+      if (mounted) setUser(data.user ?? null);
+    });
+
+    // Lắng nghe thay đổi phiên đăng nhập
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_evt, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user ?? null);
+
+      // CHỈ refresh khi thực sự thay đổi phiên
+      if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED") {
+        router.refresh();
+      }
+      // Bỏ qua: "TOKEN_REFRESHED", "INITIAL_SESSION", "PASSWORD_RECOVERY", ...
     });
-    return () => subscription.unsubscribe();
-  }, [supabase]);
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, [supabase, router]);
 
   const signOut = async () => {
     const { error } = await supabase.auth.signOut();
@@ -45,26 +67,14 @@ export default function Header() {
       <div className="max-w-7xl mx-auto flex items-center justify-between px-4 sm:px-6 lg:px-8 h-16 sm:h-20">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-          <Image
-            src="/logo.png"
-            alt="Logo"
-            width={32}
-            height={32}
-            className="sm:w-10 sm:h-10"
-          />
-          <span className="text-base sm:text-lg font-semibold text-navText">
-            Hướng nghiệp AI
-          </span>
+          <Image src="/logo.png" alt="Logo" width={32} height={32} className="sm:w-10 sm:h-10" />
+          <span className="text-base sm:text-lg font-semibold text-navText">Hướng nghiệp AI</span>
         </Link>
 
         {/* Desktop menu */}
         <nav className="hidden md:flex flex-1 items-center justify-center gap-4 sm:gap-8 lg:gap-12 whitespace-nowrap">
           {MENU.map((m) => (
-            <Link
-              key={m.href}
-              href={m.href}
-              className="text-sm sm:text-base text-navText hover:text-blue-600 transition"
-            >
+            <Link key={m.href} href={m.href} className="text-sm sm:text-base text-navText hover:text-blue-600 transition">
               {m.label}
             </Link>
           ))}
@@ -92,12 +102,12 @@ export default function Header() {
               </button>
             </div>
           ) : (
-            <Link
-              href="/signup"
+            <LoginLink
+              redirectTo={redirectTo}
               className="hidden sm:inline-block px-4 py-1.5 text-sm sm:text-base rounded-full bg-brandYellow hover:bg-yellow-500 text-black transition"
             >
               Đăng ký / Đăng nhập
-            </Link>
+            </LoginLink>
           )}
 
           {/* Mobile menu button */}
@@ -106,11 +116,7 @@ export default function Header() {
             className="p-2 md:hidden text-gray-600 hover:text-gray-800 transition"
             aria-label={menuOpen ? "Đóng menu" : "Mở menu"}
           >
-            {menuOpen ? (
-              <XMarkIcon className="w-6 h-6" />
-            ) : (
-              <Bars3Icon className="w-6 h-6" />
-            )}
+            {menuOpen ? <XMarkIcon className="w-6 h-6" /> : <Bars3Icon className="w-6 h-6" />}
           </button>
         </div>
       </div>
@@ -154,13 +160,13 @@ export default function Header() {
                   </button>
                 </div>
               ) : (
-                <Link
-                  href="/signup"
+                <LoginLink
+                  redirectTo={redirectTo}
                   onClick={() => setMenuOpen(false)}
                   className="block w-full text-center px-4 py-2 rounded-full bg-brandYellow hover:bg-yellow-500 text-black transition"
                 >
                   Đăng ký / Đăng nhập
-                </Link>
+                </LoginLink>
               )}
             </div>
           </div>

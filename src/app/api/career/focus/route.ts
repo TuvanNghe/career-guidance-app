@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic'
 export const runtime  = 'nodejs'
 
 export async function POST (req: Request) {
-  const supabase = createSupabaseRouteServerClient()
+  const supabase = await createSupabaseRouteServerClient()
 
   /* 1. Auth */
   const { data: { user } } = await supabase.auth.getUser()

@@ -5,7 +5,7 @@ import { createSupabaseRouteServerClient } from '@/lib/supabaseServer'
 export const dynamic = 'force-dynamic'
 
 export async function GET () {
-  const supabase = createSupabaseRouteServerClient()
+  const supabase = await createSupabaseRouteServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'AUTH' }, { status: 401 })
 

@@ -1,61 +1,44 @@
-// src/lib/supabaseServer.ts
+// Tạo client cho Server Component & cho Route Handler theo chuẩn Next 15
+import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-import {
-  createServerClient,
-  createBrowserClient,
-  type SupabaseClient
-} from '@supabase/ssr'
-import type { Database } from '@/types/supabase'
+
+const SUPABASE_URL = process.env.SUPABASE_URL!
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY!
 
 /**
- * Cho API Route Handlers / Middleware
+ * Dùng trong Server Components / Pages (chỉ ĐỌC cookie)
+ * -> KHÔNG gọi set/remove cookie ở đây để tránh lỗi "Cookies can only be modified..."
  */
-export async function createSupabaseRouteServerClient(): Promise<SupabaseClient<Database>> {
-  // phải await cookies() theo Next.js 15
-  const cookieStore = await cookies()  
-  return createServerClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    {
-      cookies: {
-        getAll: () => cookieStore.getAll(),
-        setAll: (toSet) => {
-          toSet.forEach(({ name, value, options }) => {
-            cookieStore.set(name, value, options)
-          })
-        }
-      }
-    }
-  )
-}
-
-/**
- * Cho Server Components / Server Actions
- */
-export async function createSupabaseServerClient(): Promise<SupabaseClient<Database>> {
+export async function createSupabaseServerClient() {
   const cookieStore = await cookies()
-  return createServerClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    {
-      cookies: {
-        getAll: () => cookieStore.getAll(),
-        setAll: (toSet) => {
-          toSet.forEach(({ name, value, options }) => {
-            cookieStore.set(name, value, options)
-          })
-        }
-      }
-    }
-  )
+  return createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    cookies: {
+      get(name: string) {
+        return cookieStore.get(name)?.value
+      },
+      // Server Component không được phép ghi cookie
+      set() {},
+      remove() {},
+    },
+  })
 }
 
 /**
- * Tuỳ chọn: cho Client Components ("use client")
+ * Dùng trong Route Handlers / Server Actions (được PHÉP ghi cookie)
  */
-export function createSupabaseBrowserClient(): SupabaseClient<Database> {
-  return createBrowserClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
+export async function createSupabaseRouteServerClient() {
+  const cookieStore = await cookies()
+  return createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    cookies: {
+      get(name: string) {
+        return cookieStore.get(name)?.value
+      },
+      set(name: string, value: string, options: CookieOptions) {
+        cookieStore.set(name, value, options)
+      },
+      remove(name: string, options: CookieOptions) {
+        cookieStore.set(name, '', { ...options, maxAge: 0 })
+      },
+    },
+  })
 }

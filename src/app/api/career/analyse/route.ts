@@ -13,7 +13,7 @@ export async function POST () {
   /* --------------------------------------------------------------------- *
    * 1. Xác thực – lấy user từ cookie
    * --------------------------------------------------------------------- */
-  const supabase = createSupabaseRouteServerClient()
+  const supabase = await createSupabaseRouteServerClient()
   const {
     data: { user },
     error: userErr,
