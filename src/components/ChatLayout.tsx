@@ -62,7 +62,8 @@ export default function ChatLayout({ userId }: Props) {
       setMessages([{
         role: "system",
         content:
-          "Xin chào, tôi là trợ lý Seven, tôi sẽ hỗ trợ bạn trong các vấn đề liên quan đến hướng nghiệp, nghề nghiệp."
+          "Xin chào, tôi là trợ lý Seven – có hơn 15 năm kinh nghiệm tư vấn hướng nghiệp. " +
+          "Tôi sẵn sàng hỗ trợ bạn với mọi câu hỏi về nghề nghiệp, từ MBTI đến bất kỳ ngành nào."
       }]);
     }
     // scroll chat pane
