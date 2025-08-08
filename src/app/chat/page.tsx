@@ -1,9 +1,12 @@
 // src/app/chat/page.tsx
 import ChatLayout from "@/components/ChatLayout";
+import { createSupabaseServerClient } from "@/lib/supabaseServer";
 
-export default function ChatPage() {
-  // TODO: nếu bạn có hệ thống auth, lấy userId ở đây
-  const userId = null;
+export default async function ChatPage() {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  return <ChatLayout userId={userId} />;
+  return <ChatLayout userId={user?.id ?? null} />;
 }

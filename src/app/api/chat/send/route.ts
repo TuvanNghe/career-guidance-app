@@ -7,6 +7,9 @@ import { fetchBestContext } from "@/lib/rag";
 import { summarizeHistory } from "@/lib/summary";
 import { needsDetailAnswer } from "@/lib/intent";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 const Body = z.object({
   threadId: z.string().uuid().optional(),
   content: z.string().min(1),
@@ -41,12 +44,21 @@ function isNarrowFollowUp(input: string) {
 }
 
 export async function POST(req: Request) {
-  // 1) Parse body
-  const { threadId: incomingThreadId, content: userQuestion } = Body.parse(
-    await req.json()
-  );
+  // 1) Parse body (trả 400 nếu sai định dạng)
+  let incomingThreadId: string | undefined;
+  let userQuestion: string;
+  try {
+    const parsed = Body.parse(await req.json());
+    incomingThreadId = parsed.threadId;
+    userQuestion = parsed.content.trim();
+  } catch (e) {
+    return NextResponse.json(
+      { error: "BAD_REQUEST", message: "Body không hợp lệ." },
+      { status: 400 }
+    );
+  }
 
-  // 2) Supabase SSR client
+  // 2) Supabase server (Route) client
   const supabase = await createSupabaseRouteServerClient();
 
   // 3) Get user (nullable)
@@ -54,9 +66,11 @@ export async function POST(req: Request) {
   try {
     const { data, error } = await supabase.auth.getUser();
     if (!error) userId = data.user?.id ?? null;
-  } catch {}
+  } catch {
+    // bỏ qua – xem như khách
+  }
 
-  // 3.1) Kiểm tra quota TRƯỚC khi lưu
+  // 3.1) Kiểm tra quota TRƯỚC khi lưu (đếm role='user')
   let used = 0;
   if (userId) {
     const { count } = await supabase
@@ -89,9 +103,10 @@ export async function POST(req: Request) {
   // 4) Create / reuse thread
   let threadId = incomingThreadId;
   if (!threadId) {
+    const title = userQuestion.slice(0, 60);
     const { data, error } = await supabase
       .from("chat_threads")
-      .insert({ user_id: userId })
+      .insert({ user_id: userId, title })
       .select("id")
       .single();
     if (error || !data?.id) {
@@ -102,21 +117,36 @@ export async function POST(req: Request) {
       );
     }
     threadId = data.id;
-  } else if (userId) {
+  } else {
     // nếu thread cũ chưa có user, claim về user hiện tại
-    await supabase
-      .from("chat_threads")
-      .update({ user_id: userId })
-      .eq("id", threadId)
-      .is("user_id", null);
+    if (userId) {
+      await supabase
+        .from("chat_threads")
+        .update({ user_id: userId })
+        .eq("id", threadId)
+        .is("user_id", null);
 
-    // 🧩 Backfill user_id cho các tin nhắn cũ role=user thuộc thread này
-    await supabase
-      .from("chat_messages")
-      .update({ user_id: userId })
-      .eq("thread_id", threadId)
-      .is("user_id", null)
-      .eq("role", "user");
+      // Backfill user_id cho các tin nhắn cũ role=user thuộc thread này
+      await supabase
+        .from("chat_messages")
+        .update({ user_id: userId })
+        .eq("thread_id", threadId)
+        .is("user_id", null)
+        .eq("role", "user");
+    }
+
+    // nếu thread chưa có title thì set từ câu hỏi đầu tiên có nội dung
+    const { data: t } = await supabase
+      .from("chat_threads")
+      .select("title")
+      .eq("id", threadId)
+      .single();
+    if (!t?.title && userQuestion) {
+      await supabase
+        .from("chat_threads")
+        .update({ title: userQuestion.slice(0, 60) })
+        .eq("id", threadId);
+    }
   }
 
   // 5) Save user message
@@ -127,23 +157,23 @@ export async function POST(req: Request) {
     content: userQuestion,
   });
 
-// ⬇⬇⬇ THÊM đoạn này NGAY SAU khi insert tin nhắn user
+  // Cập nhật updated_at để danh sách thread không “mất”
   await supabase
     .from("chat_threads")
     .update({ updated_at: new Date().toISOString() })
     .eq("id", threadId);
 
-  // 6) Load full history (newest first)
+  // 6) Load full history (newest first) → đảo lại chronological
   const { data: rawHistory } = await supabase
     .from("chat_messages")
     .select("role, content")
     .eq("thread_id", threadId)
     .order("created_at", { ascending: false });
 
-  // chronological: oldest -> newest
-  const history = (rawHistory ?? [])
-    .map((h) => ({ role: h.role, content: h.content }))
-    .reverse();
+  const history =
+    (rawHistory ?? [])
+      .map((h) => ({ role: h.role as "user" | "assistant" | "system", content: h.content }))
+      .reverse();
 
   // 7) Summarize long history
   const { summary, recent } = await summarizeHistory(
@@ -153,13 +183,13 @@ export async function POST(req: Request) {
 
   // 8) RAG (FAQ -> Blog)
   const { source, content: ragContent } = await fetchBestContext(userQuestion);
-  console.log("🛠 RAG source=", source);
+  // console.log("🛠 RAG source=", source);
 
   // 9) Decide mode
   const useDetail = needsDetailAnswer(userQuestion);
   const followupNarrow = isNarrowFollowUp(userQuestion);
 
-  // 10) System prompt
+  // 10) System prompt (GIỮ NGUYÊN Ý, chỉ chỉnh format)
   const systemPrompt = `
 Vai trò & mục tiêu
 Bạn là Chuyên viên tư vấn hướng nghiệp & đào tạo của <TỔ CHỨC>. Nhiệm vụ: trả lời đúng trọng tâm, rõ ràng, 100% tiếng Việt, giúp người dùng:
@@ -212,9 +242,9 @@ CHẾ ĐỘ TRẢ LỜI
       role: "system",
       content: followupNarrow
         ? "CHẾ ĐỘ: FOLLOWUP_NARROW — Trả lời đúng trọng tâm câu hỏi hẹp; không đổ khuôn; tối đa 1 câu hỏi làm rõ."
-        : (useDetail
-            ? "CHẾ ĐỘ: DEFAULT — Trả lời chi tiết (180–400 từ)."
-            : "CHẾ ĐỘ: DEFAULT — Trả lời ngắn gọn (120–180 từ)."),
+        : useDetail
+        ? "CHẾ ĐỘ: DEFAULT — Trả lời chi tiết (180–400 từ)."
+        : "CHẾ ĐỘ: DEFAULT — Trả lời ngắn gọn (120–180 từ).",
     },
     ...(summary
       ? [{ role: "system", content: `Tóm tắt hội thoại trước: ${summary}` }]
@@ -222,6 +252,7 @@ CHẾ ĐỘ TRẢ LỜI
     ...(source
       ? [{ role: "system", content: `Thông tin tham khảo (${source}):\n${ragContent}` }]
       : []),
+    // recent là mảng [{ role, content }, ...]
     ...recent,
     { role: "user", content: userQuestion },
   ];
@@ -240,7 +271,7 @@ CHẾ ĐỘ TRẢ LỜI
       temperature: followupNarrow ? 0.2 : useDetail ? 0.4 : 0.25,
       max_tokens: followupNarrow ? 220 : useDetail ? 600 : 200,
     });
-    assistantReply = resp.choices[0].message.content?.trim() ?? assistantReply;
+    assistantReply = resp.choices[0].message.content?.trim() || assistantReply;
   } catch (e) {
     console.error("OpenAI error", e);
   }
@@ -253,6 +284,17 @@ CHẾ ĐỘ TRẢ LỜI
     content: assistantReply,
   });
 
+  // Đồng bộ updated_at lần nữa (để thread nhảy lên đầu danh sách)
+  await supabase
+    .from("chat_threads")
+    .update({ updated_at: new Date().toISOString() })
+    .eq("id", threadId);
+
   // 14) Return to client
-  return NextResponse.json({ threadId, content: assistantReply });
+  return NextResponse.json({
+    threadId,
+    content: assistantReply,
+    // Bonus: cho phép client tự cập nhật counter ngay, nếu có dùng
+    usage: { used: used + 1, limit: MESSAGE_LIMIT },
+  });
 }

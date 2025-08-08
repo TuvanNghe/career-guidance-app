@@ -1,3 +1,4 @@
+// src/components/MessageInput.tsx
 "use client";
 
 import { useState, useRef, FormEvent } from "react";
@@ -6,11 +7,9 @@ import { ArrowUpCircle } from "lucide-react";
 interface MessageInputProps {
   userId: string | null;
   threadId?: string;
-  remaining?: number; // số tin còn lại
-  limit?: number;     // tổng quota
-  // Gọi ngay khi user bấm gửi (để hiển thị liền) — truyền kèm localId
+  remaining?: number;
+  limit?: number;
   onUserSend?: (userText: string, localId: number) => void;
-  // Gọi sau khi API trả về — truyền kèm localId để thay đúng placeholder
   onSent?: (newThreadId: string, assistantReply: string, localId: number) => void;
 }
 
@@ -33,15 +32,12 @@ export default function MessageInput({
     e.preventDefault();
     const text = value.trim();
     if (!text || sending) return;
-    if (remaining <= 0) return; // hết quota → không gửi
+    if (remaining <= 0) return;
 
-    // Tạo id tạm cho lần gửi này để map placeholder
     const localId = Date.now() + Math.floor(Math.random() * 1000);
 
-    // 1) ĐẨY NGAY tin nhắn user + placeholder lên khung to
     onUserSend?.(text, localId);
 
-    // 2) XÓA input ngay
     setValue("");
     inputRef.current?.focus();
 
@@ -52,12 +48,12 @@ export default function MessageInput({
 
       const res = await fetch("/api/chat/send", {
         method: "POST",
+        credentials: "include", // ✅ mang theo cookie
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
-        // quota hoặc lỗi khác
         let msg = "Xin lỗi, bạn chưa đăng nhập!";
         try {
           const j = await res.json();
@@ -71,7 +67,11 @@ export default function MessageInput({
       onSent?.(newId, assistantReply, localId);
     } catch (err) {
       console.error("Send message failed:", err);
-      onSent?.(threadId ?? "", "Xin lỗi, đang gặp sự cố. Liên hệ quản trị viên hoặc Bạn thử lại giúp mình nhé!", localId);
+      onSent?.(
+        threadId ?? "",
+        "Xin lỗi, đang gặp sự cố. Liên hệ quản trị viên hoặc Bạn thử lại giúp mình nhé!",
+        localId
+      );
     } finally {
       setSending(false);
     }
@@ -94,7 +94,11 @@ export default function MessageInput({
         className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
       />
 
-      <span className={`text-[11px] ${remaining <= 5 ? "text-red-600" : "text-muted-foreground"} shrink-0`}>
+      <span
+        className={`text-[11px] ${
+          remaining <= 5 ? "text-red-600" : "text-muted-foreground"
+        } shrink-0`}
+      >
         {Math.max(remaining, 0)}/{limit}
       </span>
 
@@ -102,7 +106,9 @@ export default function MessageInput({
         type="submit"
         disabled={disabled}
         className={`inline-flex h-7 w-7 items-center justify-center rounded-full transition-colors ${
-          disabled ? "cursor-not-allowed bg-muted text-muted-foreground" : "bg-violet-500 text-white hover:bg-violet-600"
+          disabled
+            ? "cursor-not-allowed bg-muted text-muted-foreground"
+            : "bg-violet-500 text-white hover:bg-violet-600"
         }`}
         aria-label="Gửi"
         title={remaining <= 0 ? "Bạn đã dùng hết quota" : "Gửi"}
