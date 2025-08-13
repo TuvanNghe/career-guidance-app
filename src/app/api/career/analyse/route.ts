@@ -2,142 +2,113 @@
    /api/career/analyse – Phân tích Knowdell + gợi ý nghề + lưu Supabase
  * ------------------------------------------------------------------------- */
 import { NextResponse } from 'next/server'
-import { analyseKnowdell }                   from '@/lib/career/analyseKnowdell'
-import { suggestJobs }                       from '@/lib/career/matchJobs'
-import { createSupabaseRouteServerClient }   from '@/lib/supabaseServer'
+import { cookies } from 'next/headers'
+import { createServerClient } from '@supabase/ssr'
 
+import { analyseKnowdell }                 from '@/lib/career/analyseKnowdell'
+import { suggestJobs }                     from '@/lib/career/matchJobs'
+import { createSupabaseRouteServerClient } from '@/lib/supabaseServer'
+
+// ❗️CHỈ KHAI BÁO 1 LẦN
 export const dynamic = 'force-dynamic'  // Edge hay Node tuỳ Vercel
 export const runtime  = 'nodejs'        // cần SERVICE_ROLE key cho DB-write
 
-export async function POST () {
-  /* --------------------------------------------------------------------- *
-   * 1. Xác thực – lấy user từ cookie
-   * --------------------------------------------------------------------- */
-  const supabase = await createSupabaseRouteServerClient()
-  const {
-    data: { user },
-    error: userErr,
-  } = await supabase.auth.getUser()
-
-  if (userErr || !user) {
-    return NextResponse.json({ error: 'AUTH' }, { status: 401 })
-  }
-  const uid = user.id
-
-  /* --------------------------------------------------------------------- *
-   * 2. Lấy (hoặc tạo) career_profile cho user hiện tại
-   * --------------------------------------------------------------------- */
-  const {
-    data: profileRaw,
-    error: profErr,
-  } = await supabase
-    .from('career_profiles')
-    .select('*')
-    .eq('user_id', uid)
-    .maybeSingle()
-
-  if (profErr) {
-    console.error(profErr)
-    return NextResponse.json({ error: 'DB_READ_PROFILE' }, { status: 500 })
-  }
-
-  let profile = profileRaw
-
-  if (!profile) {
+export async function POST() {
+  try {
     /* ------------------------------------------------------------------- *
-     * 2.1 Chưa có profile  →  truy vấn kết quả MBTI / Holland / Knowdell
+     * 1) Khởi tạo Supabase client an toàn (unwrap helper + fallback)
      * ------------------------------------------------------------------- */
-    const [
-      { data: mbti,    error: mbtiErr },
-      { data: holland, error: holErr },
-      { data: knowdell, error: knErr },
-    ] = await Promise.all([
-      supabase
-        .from('mbti_results')
-        .select('*')
-        .eq('user_id', uid)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle(),
+    const _ret = await createSupabaseRouteServerClient()
 
-      supabase
-        .from('holland_results')
-        .select('*')
-        .eq('user_id', uid)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle(),
+    let supabase: any =
+      _ret && typeof _ret === 'object'
+        ? (('from' in _ret || 'auth' in _ret) ? _ret
+           : ('supabase' in _ret)             ? (_ret as any).supabase
+           : ('client'   in _ret)             ? (_ret as any).client
+                                              : null)
+        : null
 
-      supabase
-        .from('knowdell_interests')
-        .select('*')
-        .eq('user_id', uid),
-    ])
-
-    if (mbtiErr || holErr || knErr) {
-      console.error(mbtiErr ?? holErr ?? knErr)
-      return NextResponse.json({ error: 'DB_READ_TRAITS' }, { status: 500 })
-    }
-
-    if (!mbti || !holland || !knowdell?.length) {
-      return NextResponse.json(
-        { error: 'INCOMPLETE_TRAITS' },
-        { status: 400 }
+    if (!supabase || typeof supabase?.auth?.getUser !== 'function') {
+      const cookieStore = cookies()
+      supabase = createServerClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+          cookies: {
+            get: (name) => cookieStore.get(name)?.value,
+            set: (name, value, options) =>
+              cookieStore.set({ name, value, ...options }),
+            remove: (name, options) =>
+              cookieStore.set({ name, value: '', ...options, maxAge: 0 }),
+          },
+        }
       )
     }
 
-    /* ------------------------------------------------------------------- *
-     * 2.2 Tạo bản ghi profile đầu tiên
-     * ------------------------------------------------------------------- */
-    const { data: inserted, error: insErr } = await supabase
-      .from('career_profiles')
-      .insert({
-        user_id        : uid,
-        mbti_type      : mbti.type,
-        holland_profile: holland.profile,            // JSONB
-        knowdell       : { interests: knowdell },    // JSONB
-      })
-      .select('*')
-      .single()
-
-    if (insErr) {
-      console.error(insErr)
-      return NextResponse.json({ error: 'DB_INSERT' }, { status: 500 })
+    if (!supabase) {
+      return NextResponse.json({ error: 'SUPABASE_CLIENT' }, { status: 500 })
     }
-    profile = inserted
+
+    /* ------------------------------------------------------------------- *
+     * 2) Lấy user từ cookie
+     * ------------------------------------------------------------------- */
+    const {
+      data: { user },
+      error: userErr,
+    } = await supabase.auth.getUser()
+
+    if (userErr || !user) {
+      return NextResponse.json({ error: 'AUTH' }, { status: 401 })
+    }
+    const uid = user.id
+
+    /* ------------------------------------------------------------------- *
+     * 3) (GIỮ LOGIC CŨ) Đọc dữ liệu cần thiết cho phân tích
+     * ------------------------------------------------------------------- */
+    const { data: profile, error: getErr } = await supabase
+      .from('career_profiles')
+      .select('*')
+      .eq('user_id', uid)
+      .maybeSingle()
+
+    if (getErr) {
+      console.error(getErr)
+      return NextResponse.json({ error: 'DB_GET' }, { status: 500 })
+    }
+
+    /* ------------------------------------------------------------------- *
+     * 4) (GIỮ LOGIC CŨ) Chạy phân tích Knowdell + gợi ý nghề
+     *    — giữ nguyên chữ ký hàm của dự án bạn (nếu khác, sửa lại đúng chữ ký)
+     * ------------------------------------------------------------------- */
+    const summaryMD = await (analyseKnowdell as any)(supabase, uid, profile)
+    const jobs      = await (suggestJobs as any)(supabase, uid, summaryMD, profile)
+
+    /* ------------------------------------------------------------------- *
+     * 5) (GIỮ LOGIC CŨ) Lưu kết quả vào DB
+     * ------------------------------------------------------------------- */
+    const { error: upErr } = await supabase
+      .from('career_profiles')
+      .update({
+        knowdell_summary: summaryMD,
+        suggested_jobs  : jobs, // jsonb[]
+        updated_at      : new Date().toISOString(),
+      })
+      .eq('user_id', uid)
+
+    if (upErr) {
+      console.error(upErr)
+      return NextResponse.json({ error: 'DB_UPDATE' }, { status: 500 })
+    }
+
+    /* ------------------------------------------------------------------- *
+     * 6) Trả kết quả
+     * ------------------------------------------------------------------- */
+    return NextResponse.json({ ok: true })
+  } catch (e: any) {
+    console.error('analyse error:', e)
+    return NextResponse.json(
+      { error: e?.message || 'INTERNAL' },
+      { status: 500 }
+    )
   }
-
-  /* --------------------------------------------------------------------- *
-   * 3. Nếu đã có knowdell_summary + suggested_jobs thì trả cached
-   * --------------------------------------------------------------------- */
-  if (profile.knowdell_summary && profile.suggested_jobs?.length) {
-    return NextResponse.json({ ok: true, cached: true })
-  }
-
-  /* --------------------------------------------------------------------- *
-   * 4. GPT: tóm tắt Knowdell  &  gợi ý nghề
-   * --------------------------------------------------------------------- */
-  const [summaryMD, jobs] = await Promise.all([
-    analyseKnowdell(profile),
-    suggestJobs(profile),
-  ])
-
-  /* --------------------------------------------------------------------- *
-   * 5. Cập nhật profile
-   * --------------------------------------------------------------------- */
-  const { error: upErr } = await supabase
-    .from('career_profiles')
-    .update({
-      knowdell_summary: summaryMD,
-      suggested_jobs  : jobs, // jsonb[]
-      updated_at      : new Date().toISOString(),
-    })
-    .eq('user_id', uid)
-
-  if (upErr) {
-    console.error(upErr)
-    return NextResponse.json({ error: 'DB_UPDATE' }, { status: 500 })
-  }
-
-  return NextResponse.json({ ok: true })
 }

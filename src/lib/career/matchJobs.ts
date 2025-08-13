@@ -4,7 +4,11 @@
 import { createSupabaseServerClient } from '@/lib/supabaseServer';
 
 export async function suggestJobs (profile: any) {
-  const supabase = createSupabaseServerClient();
+  // 🔧 Lấy đúng Supabase client (helper có thể trả client trực tiếp hoặc { supabase })
+  const ret = await createSupabaseServerClient();
+  const supabase: any = (ret as any)?.from ? ret : (ret as any)?.supabase;
+  if (!supabase) throw new Error('SUPABASE_CLIENT');
+
   const { data: jobs = [] } = await supabase.from('jobs').select('*');
   if (!jobs.length) return [];
 
@@ -26,13 +30,14 @@ export async function suggestJobs (profile: any) {
       }
 
       /* Knowdell values (1 đ / value) */
-      const matched = (j.top_values ?? []).filter((v:string)=>
-        profile.knowdell_profile?.values?.includes(v));
+      const matched = (j.top_values ?? []).filter((v: string) =>
+        profile.knowdell_profile?.values?.includes(v)
+      );
       score += matched.length;
       if (matched.length) reasons.push(`Giá trị: ${matched.join(', ')}`);
 
       return { id: j.id, title: j.title, score, reason: reasons.join(' · ') };
     })
-    .sort((a,b)=> b.score - a.score)
-    .slice(0,5);
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5);
 }

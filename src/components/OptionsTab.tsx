@@ -3,6 +3,26 @@
 import { useEffect, useState } from 'react'
 import AnalysisCard from './AnalysisCard'
 
+// Helper: đọc JSON an toàn, không crash nếu body rỗng/invalid
+async function safeJson(res: Response): Promise<any | null> {
+  const ct = res.headers.get('content-type') || ''
+  if (ct.includes('application/json')) {
+    try {
+      return await res.json()
+    } catch {
+      return null
+    }
+  }
+  // Nếu server trả text/204 → cố đọc text rồi bỏ qua nếu không phải JSON
+  try {
+    const txt = await res.text()
+    if (!txt) return null
+    return JSON.parse(txt)
+  } catch {
+    return null
+  }
+}
+
 export default function OptionsTab({
   canAnalyse,
   hasAnalysed,
@@ -18,10 +38,13 @@ export default function OptionsTab({
   useEffect(() => {
     if (!canAnalyse || analysed) return
 
-    fetch('/api/profile/summary')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((json) => {
+    ;(async () => {
+      try {
+        const r = await fetch('/api/profile/summary')
+        if (!r.ok) return
+        const json = await safeJson(r)
         if (!json) return
+
         // Hỗ trợ cả shape cũ (flat) lẫn shape mới bọc trong "profile"
         const summary =
           json.knowdell_summary ?? json.profile?.knowdell_summary ?? ''
@@ -29,8 +52,10 @@ export default function OptionsTab({
         if (typeof summary === 'string' && summary.trim().length > 0) {
           setAnalysed(true)
         }
-      })
-      .catch(() => {})
+      } catch {
+        // nuốt lỗi im lặng như trước
+      }
+    })()
   }, [canAnalyse, analysed])
 
   const runAnalyse = async () => {
@@ -40,8 +65,14 @@ export default function OptionsTab({
 
     try {
       const res = await fetch('/api/career/analyse', { method: 'POST' })
-      const js = await res.json()
-      if (!res.ok) throw new Error(js?.error || 'ERROR')
+
+      // 🔒 Không còn gọi res.json() trực tiếp → tránh lỗi body rỗng
+      const js = await safeJson(res)
+
+      if (!res.ok) {
+        throw new Error(js?.error || js?.message || 'ERROR')
+      }
+
       setAnalysed(true)
     } catch (e) {
       console.error(e)
