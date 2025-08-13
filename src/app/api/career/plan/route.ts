@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { cookies, headers } from 'next/headers';
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
-
+import { headers } from 'next/headers';
+import { createSupabaseServerClient } from '@/lib/supabase/server'
 export async function PATCH(req: Request) {
   const { goalId, how, when, who } = await req.json();
   if (!goalId) {

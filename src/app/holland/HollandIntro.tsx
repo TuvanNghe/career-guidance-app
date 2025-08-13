@@ -57,7 +57,7 @@ export default function HollandIntro({ hasPaid, hasResult }: Props) {
         <ol className="list-decimal list-inside space-y-1">
           <li><b>Thanh toán</b> {PRICE.toLocaleString()} đ (QR ở trang thanh toán)</li>
           <li><b>Hoàn thành</b> 54 câu hỏi – chọn đáp án đúng nhất với bạn</li>
-          <li><b>Kết quả</b> sẽ gửi email &amp; hiển thị trong Hồ sơ</li>
+          <li><b>Kết quả</b> sẽ hiển thị trong Hồ sơ nghề nghiệp</li>
         </ol>
       </div>
 

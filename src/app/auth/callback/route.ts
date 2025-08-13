@@ -1,20 +1,21 @@
-// src/app/auth/callback/route.ts
-import { NextRequest, NextResponse } from "next/server";
-import { createSupabaseRouteClient } from "@/lib/supabaseServer";
+import { NextResponse } from 'next/server'
+import { createSupabaseRouteServerClient } from '@/lib/supabase/server'
 
-export const dynamic = "force-dynamic";
-
-export async function GET(req: NextRequest) {
-  const url = new URL(req.url);
-  const code = url.searchParams.get("code");
-  const next = url.searchParams.get("next") || "/";
-
-  const supabase = await createSupabaseRouteClient();
+export async function GET(req: Request) {
+  const url = new URL(req.url)
+  const code = url.searchParams.get('code')
+  const redirectedFrom = url.searchParams.get('redirectedFrom') || '/'
 
   if (code) {
-    // set cookie phiên ở server (hợp lệ)
-    await supabase.auth.exchangeCodeForSession(code);
+    const supabase = await createSupabaseRouteServerClient()
+    try {
+      // Lưu session vào cookie server-side
+      await supabase.auth.exchangeCodeForSession(code)
+    } catch {
+      // bỏ qua nếu đã có session
+    }
   }
 
-  return NextResponse.redirect(new URL(next, req.url));
+  // luôn rời khỏi trang callback
+  return NextResponse.redirect(new URL(redirectedFrom, req.url))
 }

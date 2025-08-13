@@ -39,7 +39,7 @@ export default function MbtiIntro({ hasResult }: { hasResult:boolean }) {
         <ol className="list-decimal list-inside space-y-1">
           <li><b>Thanh toán</b> 0 đ (miễn phí)</li>
           <li><b>Hoàn thành</b> 60 câu hỏi – chọn đáp án đúng nhất với bạn</li>
-          <li><b>Kết quả</b> sẽ được gửi email & hiển thị trong Hồ sơ</li>
+          <li><b>Kết quả</b> sẽ được hiển thị trong Hồ sơ nghề nghiệp</li>
         </ol>
       </div>
 

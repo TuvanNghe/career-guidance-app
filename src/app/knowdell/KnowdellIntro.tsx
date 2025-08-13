@@ -61,7 +61,7 @@ export default function KnowdellIntro({ hasPaid, hasResult }: Props) {
             <b>Kéo-thả</b> 10 thẻ giá trị quan trọng nhất với bạn
           </li>
           <li>
-            <b>Kết quả</b> sẽ được gửi về email & lưu vào hồ sơ
+            <b>Kết quả</b> sẽ được lưu vào Hồ sơ Nghề nghiệp
           </li>
         </ol>
       </section>

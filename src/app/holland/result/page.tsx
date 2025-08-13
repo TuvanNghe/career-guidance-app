@@ -29,7 +29,8 @@ export default async function HollandResultPage({ searchParams }: Props) {
   /* ------------------------------------------------------------------ */
   /* 0. Lấy & validate mã Holland & điểm radar                          */
   /* ------------------------------------------------------------------ */
-  const code = (searchParams.code ?? "").toUpperCase();
+  const { code = '' } = await searchParams
+  const CODE = code.toUpperCase()
   if (!/^[RIASEC]{3}$/.test(code)) redirect("/holland");
 
   /* Giải mã điểm radar (base64-JSON) – nếu không có sẽ redirect */
@@ -46,7 +47,7 @@ export default async function HollandResultPage({ searchParams }: Props) {
   /* ------------------------------------------------------------------ */
   /* 1. Supabase + Auth                                                 */
   /* ------------------------------------------------------------------ */
-  const supabase = createServerComponentClient({ cookies });
+  const supabase = await createSupabaseServerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

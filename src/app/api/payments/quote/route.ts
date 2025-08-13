@@ -2,8 +2,7 @@
 /*  /api/payments/quote      –  Tính số tiền phải trả + trạng thái     */
 /* ------------------------------------------------------------------ */
 import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { createSupabaseServerClient } from '@/lib/supabase/server';
 import { STATUS } from '@/lib/constants';
 
 const PRICE = {

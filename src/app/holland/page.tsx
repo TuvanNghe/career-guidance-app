@@ -7,6 +7,7 @@ export const metadata = {
     "Khám phá sở thích nghề nghiệp theo mô hình Holland (RIASEC) để định hướng công việc phù hợp.",
 };
 
+import { createSupabaseServerClient } from '@/lib/supabase/server'
 import { cookies } from "next/headers";
 import { createServerComponentClient } from "@supabase/auth-helpers-nextjs";
 import { STATUS } from "@/lib/constants";
@@ -16,7 +17,7 @@ import HollandIntro from "./HollandIntro";     // component UI (login rồi)
 
 export default async function HollandPage() {
   // 1️⃣ Lấy session user
-  const supabase = createServerComponentClient({ cookies });
+  const supabase = await createSupabaseServerClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();

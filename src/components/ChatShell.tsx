@@ -1,55 +1,67 @@
-// src/components/ChatShell.tsx
-"use client";
+/*  ChatShell chỉ còn nhiệm vụ:
+      - lấy messages của thread hiện tại
+      - render danh sách tin nhắn
+      - KHÔNG chứa MessageInput nữa
+*/
 
-interface Msg {
-  id?: string;
-  role: "user" | "assistant" | "system";
-  content: string;
-}
+"use client"
+
+import useSWR from "swr"
+import { Loader2 } from "lucide-react"
 
 interface Props {
-  messages: Msg[];
+  userId: string | null
+  threadId?: string          // nếu dùng dynamic route /chat/[id]
 }
 
-export default function ChatShell({ messages }: Props) {
-  if (!messages || messages.length === 0) {
+/* ---- API lấy messages ---- */
+async function fetchMessages(threadId?: string) {
+  if (!threadId) return []
+  const res = await fetch(`/api/chat/messages?threadId=${threadId}`)
+  if (!res.ok) throw new Error("Failed to fetch messages")
+  return (await res.json()) as {
+    id: string
+    role: "user" | "assistant"
+    content: string
+    created_at: string
+  }[]
+}
+
+export default function ChatShell({ threadId }: Props) {
+  const { data: messages, isLoading } = useSWR(
+    threadId ? ["messages", threadId] : null,
+    () => fetchMessages(threadId)
+  )
+
+  if (isLoading)
+    return (
+      <div className="flex h-full items-center justify-center text-muted-foreground">
+        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Đang tải…
+      </div>
+    )
+
+  if (!messages || messages.length === 0)
     return (
       <div className="rounded-lg bg-gray-100 p-4 text-sm text-gray-700 max-w-[80%]">
-        Xin chào, tôi là trợ lý Seven — mình có thể giúp gì cho bạn về hướng
-        nghiệp hôm nay?
+      Xin chào, tôi là trợ lý seven, tôi sẽ hỗ trợ bạn trong các vấn đề liên quan
+      đến hướng nghiệp, nghề nghiệp.
       </div>
-    );
-  }
+    )
 
   return (
-    <div className="flex flex-col gap-3">
-      {messages.map((m, i) => {
-        const isUser = m.role === "user";
-        const isSystem = m.role === "system";
-
-        // Hàng chứa bong bóng tin nhắn: canh phải cho user, trái cho còn lại
-        return (
-          <div
-            key={m.id ?? i}
-            className={`flex ${isUser ? "justify-end" : "justify-start"}`}
-          >
-            <div
-              className={[
-                "rounded-2xl px-4 py-2 max-w-[75%] whitespace-pre-wrap break-words",
-                isUser
-                  ? "bg-violet-500 text-white"
-                  : isSystem
-                  ? "bg-amber-50 text-amber-800 text-sm border border-amber-200"
-                  : "bg-gray-100 text-gray-900",
-                // đổ bóng nhẹ cho dễ nhìn
-                "shadow-sm",
-              ].join(" ")}
-            >
-              {m.content}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
+    <>
+      {messages.map((m) => (
+        <div
+          key={m.id}
+          className={
+            m.role === "user"
+              ? "self-end max-w-[80%] rounded-lg bg-violet-500 px-3 py-2 text-white"
+              : "max-w-[80%] rounded-lg bg-muted px-3 py-2"
+          }
+        >
+          {m.content}
+        </div>
+      ))}
+    </>
+  )
 }
