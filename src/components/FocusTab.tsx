@@ -1,3 +1,7 @@
+/* --------------------------------------------------------------------------
+   src/components/FocusTab.tsx   –  Tab 3 · Mục tiêu ưu tiên
+   Gating: cần Knowdell + Holland (đọc duy nhất từ /api/profile/summary)
+-------------------------------------------------------------------------- */
 "use client"
 
 import { useEffect, useState, useTransition } from "react"
@@ -16,7 +20,7 @@ export default function FocusTab ({ existing }: { existing: Goal | null }) {
   const router                      = useRouter()
   const [pending, startTransition ] = useTransition()
 
-  /* ---------- state (init từ prop) ---------- */
+  /* ---------- form state (init từ prop) ---------- */
   const [job       , setJob       ] = useState(existing?.job        ?? "")
   const [goals     , setGoals     ] = useState(existing?.goals      ?? "")
   const [activities, setActivities] = useState(existing?.activities ?? "")
@@ -24,12 +28,47 @@ export default function FocusTab ({ existing }: { existing: Goal | null }) {
   const [endDate   , setEndDate   ] = useState(existing?.end_date   ?? "")
   const [supporter , setSupporter ] = useState(existing?.supporters ?? "")
 
+  /* ------------------------ GATING (giống OptionsTab) ------------------- */
+  const [ok, setOk] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    ;(async () => {
+      try {
+        const res = await fetch("/api/profile/summary", {
+          cache: "no-store",
+          credentials: "include",
+        })
+        if (!res.ok) throw new Error("bad response")
+        const json = await res.json()
+        const p = json?.profile ?? json ?? {}
+
+        // Knowdell
+        const hasKnowdell =
+          typeof p?.knowdell_summary === "string" &&
+          p.knowdell_summary.trim().length > 0
+
+        // Holland (ưu tiên key phổ biến; fallback proxy suggested_jobs)
+        const hasHolland =
+          (typeof p?.holland_code === "string" && p.holland_code.trim().length > 0) ||
+          (typeof p?.holland_summary === "string" && p.holland_summary.trim().length > 0) ||
+          (typeof p?.holland?.letters === "string" && p.holland.letters.trim().length > 0) ||
+          (Array.isArray(p?.holland_scores) && p.holland_scores.length > 0) ||
+          (Array.isArray(p?.suggested_jobs) && p.suggested_jobs.length > 0)
+
+        if (alive) setOk(Boolean(hasKnowdell && hasHolland))
+      } catch {
+        if (alive) setOk(false)
+      }
+    })()
+    return () => { alive = false }
+  }, [])
+
   /* ---------- fallback: fetch nếu prop rỗng ---------- */
   useEffect(() => {
-    if (existing) return            // đã có prop → khỏi fetch
-
-    fetch("/api/career/goal")
-      .then(res => res.ok ? res.json() : null)
+    if (existing) return
+    fetch("/api/career/goal", { cache: "no-store", credentials: "include" })
+      .then(res => (res.ok ? res.json() : null))
       .then(json => {
         const g: Goal | null = json?.data ?? null
         if (!g) return
@@ -48,7 +87,6 @@ export default function FocusTab ({ existing }: { existing: Goal | null }) {
     if (!job.trim() || !goals.trim()) {
       return alert("Vui lòng nhập Nghề nghiệp & Mục tiêu ưu tiên.")
     }
-
     startTransition(async () => {
       await fetch("/api/career/focus", {
         method : "POST",
@@ -65,10 +103,20 @@ export default function FocusTab ({ existing }: { existing: Goal | null }) {
     })
   }
 
-  /* ---------- UI ---------- */
+  /* ------------------------------- UI ----------------------------------- */
+  if (ok === null) {
+    return <p className="rounded border bg-gray-50 p-4 text-center">Đang kiểm tra điều kiện…</p>
+  }
+  if (!ok) {
+    return (
+      <p className="rounded border bg-yellow-50 p-4 text-center">
+        Hoàn tất <b>Holland</b> và <b>Knowdell</b> trước khi thiết lập <b>Mục tiêu ưu tiên</b>.
+      </p>
+    )
+  }
+
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      {/* ... (các input giống bản mock-up trước) */}
       <div>
         <label className="font-medium block">Nghề nghiệp lựa chọn</label>
         <input
@@ -78,7 +126,7 @@ export default function FocusTab ({ existing }: { existing: Goal | null }) {
           placeholder="VD: Chuyên viên nhân sự"
         />
       </div>
-      {/* Mục tiêu ưu tiên */}
+
       <div>
         <label className="font-medium block">
           Những mục tiêu ưu tiên và quan trọng nhất để đạt được nghề nghiệp yêu thích
@@ -91,7 +139,6 @@ export default function FocusTab ({ existing }: { existing: Goal | null }) {
         />
       </div>
 
-      {/* Hoạt động ưu tiên */}
       <div>
         <label className="font-medium block">
           Hoạt động ưu tiên và quan trọng để đạt được nghề nghiệp yêu thích
@@ -104,7 +151,6 @@ export default function FocusTab ({ existing }: { existing: Goal | null }) {
         />
       </div>
 
-      {/* Ngày bắt đầu / hoàn thành */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label className="font-medium block">Thời gian bắt đầu</label>
@@ -126,7 +172,6 @@ export default function FocusTab ({ existing }: { existing: Goal | null }) {
         </div>
       </div>
 
-      {/* Người hỗ trợ */}
       <div>
         <label className="font-medium block">Người hỗ trợ / đồng hành</label>
         <input
@@ -137,6 +182,7 @@ export default function FocusTab ({ existing }: { existing: Goal | null }) {
           placeholder="VD: Anh A (Mentor), Chị B (Leader)…"
         />
       </div>
+
       <button
         onClick={handleSave}
         disabled={pending}
